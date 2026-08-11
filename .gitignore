@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+
+# Chrome dev profile (52MB, do not commit)
+.chrome-profile-copy/
+.tmp-chrome-profile/
+
+# logs
+*.log
+serve.out
+serve.err
+chrome-stderr.log
+chrome-stdout.log
+
+# dev / debug artifacts (in repo root only — docs/ may keep panel-*.png)
+/_tm.zip
+/_tm_extracted
+/_tm.txt
+/_data_url.txt
+/_row.txt
+/panel-*.png
+/linux-sb-*.png
+/linux-sb-*.html
+/after-toggle.png
+/tm-*.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+*.swp
