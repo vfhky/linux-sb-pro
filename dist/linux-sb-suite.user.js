@@ -3,6 +3,9 @@
 // @namespace    https://github.com/vfhky/linux-sb-pro
 // @version      1.0.0
 // @description  Compact floating panel for linux.sb: shows logged-in user, daily check-in status, and an auto-signin toggle. Modular core (logger/storage/events/http/dom) plus a UI module that can be extended for more forum features.
+// @downloadURL https://update.greasyfork.org/scripts/590905.user.js
+// @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
+// @license     Apache-2.0
 // @author       vfhky
 // @match        https://linux.sb/*
 // @match        https://www.linux.bi/*
@@ -20,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-11T16:10:51.493Z
+ * built: 2026-08-11T16:55:19.314Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
