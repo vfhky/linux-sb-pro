@@ -7,15 +7,17 @@
 ## Install
 
 1. Install the [Tampermonkey](https://www.tampermonkey.net/) extension.
-2. Install the script from [Greasy Fork](https://greasyfork.org/) (search for `linux.sb Suite`).
+2. Install the script from [Greasy Fork](https://greasyfork.org/en/scripts/590905-linux-sb-suite) (search for `linux.sb Suite`).
 3. Open <https://linux.sb/> — a small pill appears in the bottom-right corner.
+
+After install, Tampermonkey auto-updates the script from Greasy Fork using the script's built-in `@updateURL`.
 
 ## Features
 
 - **Always-visible status pill**: avatar + nickname + a colored dot that reflects the daily check-in state (green = signed in, yellow = not yet, gray = guest).
 - **One-click sign-in**: expand the pill and tap `立即签到` if you have not signed in today.
 - **Auto sign-in**: a switch in the expanded panel enables automatic check-in on every page load. Persisted in `GM_*`, no per-session confirmation.
-- **Self-update**: the script polls its update URL on the configured schedule (managed by Tampermonkey). When a new version is available, TM prompts you to update.
+- **Self-update**: Tampermonkey polls Greasy Fork's meta endpoint on its own schedule. New versions land with one click.
 
 ## Privacy
 
@@ -35,7 +37,7 @@ LSB  (root namespace, the only global)
 
 Modules are registered with `LSB.register("name", factory, deps)`. Dependencies are resolved in topological order, then each factory is called with the resolved core + module instances.
 
-To add a feature, append a `LSB.register(...)` block at the bottom of `src/linux-sb-suite.user.js`:
+To add a feature, append a `LSB.register(...)` block at the bottom of `linux-sb-suite.user.js`:
 
 ```js
 LSB.register("myFeature", function ({ config, http, dom, user }) {
@@ -67,12 +69,24 @@ node chrome-cdp.mjs eval "window.LSB.api.getCurrentUser()"
 node chrome-cdp.mjs tm-update
 ```
 
-### Producing a public build
+### Producing a public release
 
-The repo keeps `linux-sb-suite.user.js` as the dev version (with localhost `updateURL` so the dev loop self-updates). Run `node build.mjs` to produce `dist/linux-sb-suite.user.js` — that artifact is what gets submitted to Greasy Fork.
+The repo keeps `linux-sb-suite.user.js` as the dev version (with a localhost `@updateURL` so the dev loop self-updates). `dist/linux-sb-suite.user.js` is the public artifact that ships to users.
 
-Edit `.build-meta.json` to bump version / change the public metadata.
+`build.mjs` reads `.build-meta.json` and rewrites the public file's metadata: `@version`, `@author`, `@namespace`, `@description`, `@license`, plus the `@updateURL` / `@downloadURL` that point at Greasy Fork's auto-update endpoints.
+
+Release flow once a feature is ready:
+
+1. Bump `version` in `.build-meta.json` (e.g. `1.0.1` → `1.1.0`).
+2. `node build.mjs` regenerates `dist/linux-sb-suite.user.js` and mirrors the version into the runtime `LSB.version` constant.
+3. `git add . && git commit && git push`.
+4. Greasy Fork's script page already has a "Source code" sync configured against the GitHub raw URL (`https://raw.githubusercontent.com/vfhky/linux-sb-pro/main/dist/linux-sb-suite.user.js`) in auto mode. The new version is detected on the next sync tick.
+5. Tampermonkey picks up the new meta from `@updateURL` on its own update check and offers the upgrade to installed users.
+
+The dev script's `@version` is left at the in-progress dev number (e.g. `0.3.6`); only the public release version is bumped in step 1.
 
 ## License
 
-MIT.
+Apache-2.0.
+
+
