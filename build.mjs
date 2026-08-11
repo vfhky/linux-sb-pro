@@ -72,6 +72,8 @@ function main() {
 
   // Replace or insert core metadata lines.
   src = src.replace(/^(\/\/ @version\s+).*$/m, `$1${meta.version}`);
+  // Mirror the @version into the runtime version constant surfaced in the panel.
+  src = src.replace(/(version:\s*)(["'`"])([^"'`"]+)\2/, `$1$2${meta.version}$2`);
   src = src.replace(/^(\/\/ @author\s+).*$/m, `$1${meta.author}`);
   src = src.replace(/^(\/\/ @namespace\s+).*$/m, `$1${meta.namespace}`);
   if (meta.description) src = setMetaLine(src, "description", meta.description);

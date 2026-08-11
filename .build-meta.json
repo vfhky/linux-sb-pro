@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "vfhky",
   "namespace": "https://github.com/vfhky/linux-sb-pro",
   "description": "Compact floating panel for linux.sb: shows logged-in user, daily check-in status, and an auto-signin toggle. Modular core (logger/storage/events/http/dom) plus a UI module that can be extended for more forum features.",

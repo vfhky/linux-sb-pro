@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.0.0
+// @version      1.0.1
 // @description  Compact floating panel for linux.sb: shows logged-in user, daily check-in status, and an auto-signin toggle. Modular core (logger/storage/events/http/dom) plus a UI module that can be extended for more forum features.
 // @downloadURL https://update.greasyfork.org/scripts/590905.user.js
 // @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-11T16:55:19.314Z
+ * built: 2026-08-11T16:59:13.108Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -73,7 +73,7 @@
 
   // ----- guard: run once per page ---------------------------------------
   if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "0.3.6" });
+  const LSB = (root.LSB = { __booted: true, version: "1.0.1" });
 
   // =====================================================================
   // core/config
