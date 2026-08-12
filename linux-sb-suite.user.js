@@ -368,13 +368,20 @@
       signinCard:     ".signin-card, .daily-signin, [class*=\"signin\"], [class*=\"checkin\"]",
       signinButton:   "button[class*=\"signin\"], button[class*=\"checkin\"], a[class*=\"signin\"]",
       // Right sidebar user card (logged-in home page)
-      userCard:       ".sidebar-card.user-card",
-      userNameLink:   ".sidebar-card.user-card .user-name",
-      userAvatar:     ".sidebar-card.user-card .user-avatar-big img.avatar-img",
-      userRank:       ".sidebar-card.user-card .user-rank",
+      // Class is "card sidebar-card user-card" on the live site.
+      userCard:        ".sidebar-card.user-card",
+      userNameLink:    ".sidebar-card.user-card .user-name",
+      // Avatar wrapper (logged-in) + inner <img> (real photo) + visitor letter.
+      userAvatar:      ".sidebar-card.user-card .user-avatar-big",
+      userAvatarImg:   ".sidebar-card.user-card .user-avatar-big img.avatar-img",
+      userCardVisitor: ".sidebar-card.user-card .user-avatar-big.visitor-avatar",
+      // Rank text reads "笔友 · 积分 256"; we extract the digit run for points.
+      userRank:        ".sidebar-card.user-card .user-rank",
+      userPoints:      ".sidebar-card.user-card .user-points",
       // Home page sidebar daily checkin card
-      dailyCheckinCard:  ".sidebar-card.daily-checkin",
+      dailyCheckinCard:   ".sidebar-card.daily-checkin-card",
       dailyCheckinStatus: ".daily-checkin-sub",
+      dailyCheckinBadge:  ".daily-checkin-badge",
       // Checkin page form
       checkinForm:      'form.post-action-form[action="/daily_checkin"]',
       checkinBtn:       'form.post-action-form[action="/daily_checkin"] button[type=submit]',
@@ -482,19 +489,38 @@
         // Pull nickname / avatar / rank from the right sidebar card.
         const card = dom.$(LSB.api.linuxSb.selectors.userCard);
         const nameEl = card ? dom.$(LSB.api.linuxSb.selectors.userNameLink, card) : null;
-        const avatarEl = card ? dom.$(LSB.api.linuxSb.selectors.userAvatar, card) : null;
-        const rankEl = card ? dom.$(LSB.api.linuxSb.selectors.userRank, card) : null;
-        const nickname = nameEl ? dom.text(nameEl) : null;
-        const avatarUrl = avatarEl ? dom.src(avatarEl) : null;
+        const avatarWrap = card ? dom.$(LSB.api.linuxSb.selectors.userAvatar, card) : null;
+        const avatarImg  = avatarWrap ? dom.$("img.avatar-img", avatarWrap) : null;
+        const rankEl     = card ? dom.$(LSB.api.linuxSb.selectors.userRank, card) : null;
+        const pointsEl   = card ? dom.$(LSB.api.linuxSb.selectors.userPoints, card) : null;
+        const nickname   = nameEl ? dom.text(nameEl) : null;
+        let avatarUrl    = avatarImg ? dom.src(avatarImg) : null;
+        let avatarIsDicebear = !!avatarUrl && /\/avatars\/|dicebear/i.test(avatarUrl);
+        if (!avatarUrl && avatarWrap && avatarWrap.classList.contains("visitor-avatar")) {
+          // Visitor variant: synthesise a stable placeholder from the id.
+          avatarUrl = LSB.api.linuxSb.avatarUrl.dicebearForUserId(id || "guest");
+          avatarIsDicebear = true;
+        }
+        // Rank text is "笔友 · 积分 256"; points may not have a dedicated element.
+        const rankText = rankEl ? dom.text(rankEl) : null;
+        let points = null;
+        if (pointsEl) {
+          const m = dom.text(pointsEl).match(/(\d+)/);
+          if (m) points = Number(m[1]);
+        } else if (rankText) {
+          const m = rankText.match(/(\d+)/);
+          if (m) points = Number(m[1]);
+        }
         return {
           id: id || null,
           nickname: nickname || null,
           avatarUrl: avatarUrl || null,
-          avatarIsDicebear: !!avatarUrl && /dicebear|\/avatars\//i.test(avatarUrl),
+          avatarIsDicebear,
           profileUrl: href ? dom.absUrl(href) : null,
-          rank: rankEl ? dom.text(rankEl) : null,
+          rank: rankText || null,
+          points,
           isLoggedIn: true,
-          source: "user-card",
+          source: avatarImg ? "user-card" : "user-card-visitor",
         };
       }
       // 2. any avatar-profile-link on page (post author etc.)
@@ -591,7 +617,7 @@
       if (!info) return null;
       return LSB.utils.pick(info, [
         "id", "nickname", "avatarUrl", "avatarIsDicebear",
-        "profileUrl", "isLoggedIn", "source", "rank",
+        "profileUrl", "isLoggedIn", "source", "rank", "points",
       ]);
     }
 
