@@ -47,3 +47,13 @@ _fill.mjs
 _submit.mjs
 _resync.mjs
 _probe_login.mjs
+# real (non-synthetic) fixture captures from live site probes
+test/fixtures-real/
+# disposable CDP capture scripts
+_capture.mjs
+_inspect.mjs
+
+
+# disposable CDP probe screenshots
+_probe*.png
+
