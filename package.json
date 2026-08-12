@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "fixtures": "node scripts/gen-fixtures.mjs",
+    "test": "npm run fixtures && node scripts/run-tests.mjs"
   },
   "keywords": [],
   "author": "",
@@ -14,4 +15,3 @@
     "playwright": "^1.62.1"
   }
 }
-
