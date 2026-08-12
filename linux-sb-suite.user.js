@@ -883,20 +883,36 @@
     return { name: "notif", init: bindUser };
   });
 
-  LSB.register("ui", function ({ config, dom, events, user, signin }) {
+  LSB.register("ui", function ({ config, dom, events, user, signin, panelStyle, notif }) {
     const log = LSB.logger.make("ui");
     const log_user = LSB.logger.make("ui/user");
     const log_signin = LSB.logger.make("ui/signin");
+
+    // -----------------------------------------------------------------
+    // Data-driven CSS: position and theme rules come from config
+    // and core/palettes, not hard-coded class lists.
+    // -----------------------------------------------------------------
+    if (typeof panelPositionCss === "function") {
+      GM_addStyle(panelPositionCss(config.ui.positions));
+    }
+    if (typeof panelThemeCss === "function") {
+      const palettes = {};
+      for (const t of config.ui.themes) {
+        if (t === "auto") continue;
+        try { palettes[t] = getPalette(t); } catch (e) { /* unknown theme */ }
+      }
+      GM_addStyle(panelThemeCss(palettes));
+    }
 
     GM_addStyle(`
       #lsb-panel {
         position: fixed; z-index: 2147483646;
         font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-        color: #eee;
-        background: rgba(20, 22, 28, 0.94);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--lsb-fg, #eee);
+        background: var(--lsb-bg, rgba(20, 22, 28, 0.94));
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.08));
         border-radius: 8px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        box-shadow: var(--lsb-shadow, 0 8px 24px rgba(0, 0, 0, 0.35));
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         user-select: none;
@@ -904,11 +920,6 @@
         min-width: 140px;
         overflow: hidden;
       }
-      #lsb-panel.lsb-pos-br { bottom: 12px; right: 12px; }
-      #lsb-panel.lsb-pos-bl { bottom: 12px; left: 12px; }
-      #lsb-panel.lsb-pos-tr { top: 12px; right: 12px; }
-      #lsb-panel.lsb-pos-tl { top: 12px; left: 12px; }
-
       #lsb-panel .lsb-compact {
         display: flex; align-items: center; gap: 8px;
         padding: 6px 10px 6px 8px;
@@ -934,6 +945,15 @@
       #lsb-panel .lsb-dot.lsb-signed   { background: #4ade80; box-shadow: 0 0 6px rgba(74, 222, 128, 0.45); }
       #lsb-panel .lsb-dot.lsb-unsigned { background: #fbbf24; box-shadow: 0 0 6px rgba(251, 191, 36, 0.45); }
       #lsb-panel .lsb-dot.lsb-guest    { background: #6b7280; }
+      #lsb-panel .lsb-notif-dot {
+        position: relative;
+        min-width: 16px; height: 16px; padding: 0 4px;
+        border-radius: 9999px; background: #e64545; color: #fff;
+        font-size: 10px; line-height: 16px; font-weight: 600;
+        text-align: center; box-shadow: 0 0 0 2px var(--lsb-bg, rgba(20,22,28,0.94));
+        margin-left: -4px;
+      }
+      #lsb-panel .lsb-notif-dot[hidden] { display: none !important; }
       #lsb-panel [hidden] { display: none !important; }
       #lsb-panel .lsb-chevron {
         margin-left: auto; opacity: 0.5; font-size: 11px;
@@ -944,29 +964,34 @@
       #lsb-panel .lsb-details {
         display: none;
         border-top: 1px solid rgba(255, 255, 255, 0.06);
-        padding: 10px 12px 8px;
+        padding: 0;
         font-size: 12px;
       }
       #lsb-panel.lsb-open .lsb-details { display: block; }
+      #lsb-panel .lsb-section { padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.06); }
+      #lsb-panel .lsb-section-title { font-size: 11px; opacity: 0.6; margin-bottom: 4px; }
+      #lsb-panel .lsb-notif-list { list-style: none; margin: 0; padding: 0; max-height: 140px; overflow: auto; }
+      #lsb-panel .lsb-notif-list li { padding: 3px 0; font-size: 12px; }
+      #lsb-panel .lsb-notif-list a { color: inherit; text-decoration: none; opacity: 0.85; }
+      #lsb-panel .lsb-notif-list a:hover { opacity: 1; text-decoration: underline; }
+      #lsb-panel .lsb-notif-list .lsb-mention { color: #fbbf24; font-weight: 600; }
+      #lsb-panel .lsb-notif-list .lsb-empty { opacity: 0.5; font-style: italic; }
 
-      #lsb-panel .lsb-row { display: flex; align-items: center; gap: 8px; }
-      #lsb-panel .lsb-row + .lsb-row { margin-top: 8px; }
-      #lsb-panel .lsb-meta { color: #9ca3af; font-size: 11px; }
       #lsb-panel .lsb-signin-row {
         display: flex; align-items: center; justify-content: center;
-        min-height: 28px; margin-top: 4px;
+        min-height: 28px; padding: 8px 12px 0;
       }
       #lsb-panel .lsb-signed-text {
         color: #4ade80; font-size: 13px; font-weight: 600;
       }
       #lsb-panel .lsb-rank-row {
         display: flex; justify-content: center;
-        margin-top: 4px;
+        padding: 4px 12px 0;
       }
-
+      #lsb-panel .lsb-meta { color: #9ca3af; font-size: 11px; }
       #lsb-panel .lsb-action {
         display: flex; align-items: center; justify-content: space-between;
-        gap: 8px; margin-top: 10px;
+        gap: 8px; padding: 10px 12px 0;
       }
       #lsb-panel .lsb-action .lsb-label { color: #d1d5db; }
       #lsb-panel .lsb-btn {
@@ -982,7 +1007,9 @@
       #lsb-panel .lsb-btn.lsb-primary { background: #4ade80; color: #052e16; border-color: transparent; font-weight: 600; }
       #lsb-panel .lsb-btn.lsb-primary:hover { background: #22c55e; }
       #lsb-panel .lsb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
+      #lsb-panel .lsb-gear {
+        padding: 2px 6px; font-size: 12px; line-height: 1;
+      }
       #lsb-panel .lsb-switch {
         position: relative; display: inline-block;
         width: 32px; height: 18px; flex: none;
@@ -1004,21 +1031,31 @@
       #lsb-panel .lsb-switch input:checked + .lsb-slider { background: #4ade80; }
       #lsb-panel .lsb-switch input:checked + .lsb-slider::before { transform: translateX(14px); }
 
+      #lsb-panel .lsb-settings {
+        padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.06);
+        background: rgba(0,0,0,0.15);
+      }
+      #lsb-panel .lsb-settings[hidden] { display: none !important; }
+      #lsb-panel .lsb-settings h4 { margin: 0 0 6px; font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
+      #lsb-panel .lsb-settings label { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 0; cursor: pointer; }
+
       #lsb-panel .lsb-footer {
         display: flex; align-items: center; justify-content: space-between;
-        margin-top: 10px; padding-top: 8px;
+        margin-top: 0; padding: 8px 12px;
         border-top: 1px solid rgba(255, 255, 255, 0.05);
         font-size: 11px; color: #6b7280;
       }
-      #lsb-panel .lsb-footer a {
-        color: #9ca3af; text-decoration: none;
-      }
+      #lsb-panel .lsb-footer a { color: #9ca3af; text-decoration: none; }
       #lsb-panel .lsb-footer a:hover { color: #e5e7eb; text-decoration: underline; }
     `);
 
+    // -----------------------------------------------------------------
+    // Build the panel.  Sections are rendered later from the registry.
+    // -----------------------------------------------------------------
     const root = document.createElement("div");
     root.id = "lsb-panel";
-    root.className = "lsb-pos-br";
+    root.dataset.pos = LSB.panelStyle ? LSB.panelStyle.pos : "BR";
+    root.dataset.theme = LSB.panelStyle ? LSB.panelStyle.theme : "auto";
     root.innerHTML = `
       <div class="lsb-compact" data-lsb="compact">
         <img class="lsb-avatar" data-lsb="avatar" alt="" />
@@ -1027,23 +1064,26 @@
         <span class="lsb-chevron">▾</span>
       </div>
       <div class="lsb-details">
+        <div class="lsb-sections" data-lsb="sections"></div>
         <div class="lsb-signin-row">
-          <span data-lsb="signin-text" class="lsb-signed-text" hidden>✓ 已签到</span>
-          <button class="lsb-btn lsb-primary" data-lsb="signin" hidden>立即签到</button>
+          <span data-lsb="signin-text" class="lsb-signed-text" hidden>✓ ${LSB.i18n.t("signin.status.signed")}</span>
+          <button class="lsb-btn lsb-primary" data-lsb="signin" hidden>${LSB.i18n.t("signin.status.unsigned")}</button>
         </div>
         <div class="lsb-rank-row" data-lsb="rank-row">
           <span class="lsb-meta" data-lsb="rank">—</span>
         </div>
         <div class="lsb-action">
-          <span class="lsb-label">自动签到</span>
+          <span class="lsb-label">${LSB.i18n.t("signin.auto")}</span>
           <label class="lsb-switch">
             <input type="checkbox" data-lsb="auto" />
             <span class="lsb-slider"></span>
           </label>
         </div>
+        <div class="lsb-settings" data-lsb="settings" hidden></div>
         <div class="lsb-footer">
-          <a data-lsb="profile" href="#" target="_blank" rel="noopener">个人主页</a>
+          <a data-lsb="profile" href="#" target="_blank" rel="noopener">${LSB.i18n.t("panel.title")}</a>
           <span data-lsb="version">v0.0.0</span>
+          <button type="button" class="lsb-btn lsb-gear" data-lsb="gear" title="${LSB.i18n.t("panel.settings")}">⚙</button>
         </div>
       </div>
     `;
@@ -1054,11 +1094,148 @@
     const nameEl = $("name");
     const avatarEl = $("avatar");
     const signinBtn = $("signin");
+    const signinText = $("signin-text");
     const autoInput = $("auto");
     const profileLink = $("profile");
     const versionEl = $("version");
+    const sectionsHost = $("sections");
+    const settingsHost = $("settings");
+    const gear = $("gear");
     versionEl.textContent = `v${LSB.version}`;
 
+    function isLoggedIn() {
+      return !!(user && user.info && user.info.id);
+    }
+
+    // Sections are rendered from the registry.  Modules register their
+    // own section (e.g. notif) and the host fills them in.
+    function rerenderSections() {
+      if (!LSB.sections) return;
+      const out = LSB.sections.render({ isLoggedIn: isLoggedIn() });
+      sectionsHost.innerHTML = out.innerHTML;
+    }
+
+    // Apply the panel position + theme.  Reads from LSB.panelStyle
+    // (the source of truth) and sets the matching data attributes +
+    // CSS variables on the root element.
+    function applyPanelStyle(payload) {
+      const pos = (payload && payload.pos) || (LSB.panelStyle ? LSB.panelStyle.pos : "BR");
+      const theme = (payload && payload.theme) || (LSB.panelStyle ? LSB.panelStyle.theme : "auto");
+      root.dataset.pos = pos;
+      root.dataset.theme = theme;
+      const effective = (theme === "auto")
+        ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        : theme;
+      if (typeof getPalette === "function" && effective !== "auto") {
+        try {
+          const p = getPalette(effective);
+          root.style.setProperty("--lsb-bg", p.bg);
+          root.style.setProperty("--lsb-fg", p.fg);
+          root.style.setProperty("--lsb-border", p.border);
+          root.style.setProperty("--lsb-shadow", p.shadow);
+        } catch (e) { /* unknown theme */ }
+      }
+    }
+
+    // Render the notification badge on the compact row, and populate
+    // the notif list inside the section (re-queried because the
+    // section was just re-rendered by rerenderSections()).
+    function renderNotif(payload) {
+      const { unread, list } = payload || { unread: 0, list: [] };
+      let notifDot = root.querySelector(".lsb-notif-dot");
+      if (!notifDot) {
+        notifDot = document.createElement("span");
+        notifDot.className = "lsb-notif-dot";
+        const compact = root.querySelector(".lsb-compact");
+        if (compact) compact.insertBefore(notifDot, compact.querySelector(".lsb-chevron"));
+      }
+      notifDot.textContent = unread > 9 ? "9+" : (unread > 0 ? String(unread) : "");
+      notifDot.hidden = unread === 0;
+      const listEl = root.querySelector('[data-lsb="notif-list"]');
+      const countEl = root.querySelector('[data-lsb="notif-count"]');
+      if (countEl) countEl.textContent = String(unread);
+      if (listEl) {
+        listEl.innerHTML = "";
+        if (!list.length) {
+          const li = document.createElement("li");
+          li.className = "lsb-empty";
+          li.textContent = LSB.i18n.t("notif.empty");
+          listEl.appendChild(li);
+        } else {
+          for (const item of list) {
+            const li = document.createElement("li");
+            const a = document.createElement("a");
+            a.href = item.url; a.target = "_blank"; a.rel = "noopener";
+            a.textContent = item.title;
+            if (item.isMention) a.classList.add("lsb-mention");
+            li.appendChild(a);
+            listEl.appendChild(li);
+          }
+        }
+      }
+    }
+
+    // Render the settings popover from the registry.  Any module that
+    // registered a setting gets a row in here.
+    function renderSettings() {
+      if (!LSB.settings) return;
+      const defs = LSB.settings.list();
+      const groups = LSB.settings.groups();
+      const html = [];
+      for (const g of groups) {
+        html.push(`<h4>${g}</h4>`);
+        for (const d of defs.filter((x) => x.group === g)) {
+          const s = LSB.settings.get(d.key);
+          const label = LSB.i18n.t(d.label) || d.key;
+          if (d.type === "boolean") {
+            html.push(`<label><input type="checkbox" data-lsb-setting="${d.key}"${s.get() ? " checked" : ""}> ${label}</label>`);
+          } else if (d.type === "enum") {
+            for (const opt of d.options) {
+              const optLabel = LSB.i18n.t(d.label + "." + opt) || opt;
+              html.push(`<label><input type="radio" name="lsb-${d.key}" data-lsb-setting="${d.key}" data-lsb-value="${opt}"${s.get() === opt ? " checked" : ""}> ${optLabel}</label>`);
+            }
+          }
+        }
+      }
+      html.push(`<div style="text-align:right;margin-top:8px"><button type="button" class="lsb-btn" data-lsb="settings-close">${LSB.i18n.t("panel.close")}</button></div>`);
+      settingsHost.innerHTML = html.join("");
+    }
+    settingsHost.addEventListener("change", (ev) => {
+      const el = ev.target.closest("[data-lsb-setting]");
+      if (!el) return;
+      const key = el.getAttribute("data-lsb-setting");
+      const def = LSB.settings.list().find((d) => d.key === key);
+      if (!def) return;
+      const s = LSB.settings.get(key);
+      if (def.type === "boolean") s.set(el.checked);
+      else s.set(el.getAttribute("data-lsb-value") || el.value);
+    });
+    $("settings-close").addEventListener("click", () => { settingsHost.hidden = true; });
+    gear.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      renderSettings();
+      settingsHost.hidden = false;
+    });
+    document.addEventListener("click", (ev) => {
+      if (settingsHost.hidden) return;
+      if (settingsHost.contains(ev.target) || gear.contains(ev.target)) return;
+      settingsHost.hidden = true;
+    });
+
+    // Wire the in-panel auto-signin toggle + the settings registry.
+    if (LSB.settings) {
+      const s = LSB.settings.get("signin.auto");
+      autoInput.checked = !!s.get();
+      autoInput.addEventListener("change", () => s.set(autoInput.checked));
+      s.subscribe((v) => { autoInput.checked = !!v; });
+    }
+    autoInput.addEventListener("change", () => {
+      const next = autoInput.checked;
+      signin.setAutoSignin(next);
+      log_user.info("auto-signin toggled", next);
+    });
+
+    // Compact / popover toggle.
     $("compact").addEventListener("click", (ev) => {
       if (ev.target.closest("[data-lsb]") && ev.target.dataset.lsb !== "compact") return;
       root.classList.toggle("lsb-open");
@@ -1069,19 +1246,13 @@
       root.classList.remove("lsb-open");
     });
 
-    autoInput.addEventListener("change", () => {
-      const next = autoInput.checked;
-      signin.setAutoSignin(next);
-      log_user.info("auto-signin toggled", next);
-    });
-
     signinBtn.addEventListener("click", async () => {
       signinBtn.disabled = true;
       const orig = signinBtn.textContent;
       signinBtn.textContent = "签到中…";
       try {
         const r = await signin.performSignin();
-        signinBtn.textContent = r.ok ? "已签到" : "签到失败";
+        signinBtn.textContent = r.ok ? LSB.i18n.t("signin.status.signed") : "签到失败";
         if (r.ok) setTimeout(() => refresh().catch(() => {}), 600);
       } catch (err) {
         signinBtn.textContent = "签到失败";
@@ -1094,28 +1265,30 @@
 
     function _signinLabel(status) {
       return {
-        "signed-in": "已签到",
-        "not-signed-in": "未签到",
-        "guest": "请先登录",
-        "unknown": "状态不明",
+        "signed-in": LSB.i18n.t("signin.status.signed"),
+        "not-signed-in": LSB.i18n.t("signin.status.unsigned"),
+        "guest": LSB.i18n.t("signin.status.guest"),
+        "unknown": LSB.i18n.t("signin.status.unknown"),
       }[status] || status;
     }
 
-    function _position() {
-      const pos = config.ui.panelPosition || "bottom-right";
-      root.classList.remove("lsb-pos-br", "lsb-pos-bl", "lsb-pos-tr", "lsb-pos-tl");
-      const map = { "bottom-right": "lsb-pos-br", "bottom-left": "lsb-pos-bl", "top-right": "lsb-pos-tr", "top-left": "lsb-pos-tl" };
-      root.classList.add(map[pos] || "lsb-pos-br");
+    // Event subscriptions.
+    events.on("notif:updated", renderNotif);
+    events.on("panel:reapply", applyPanelStyle);
+    applyPanelStyle();
+    if (window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      if (mq.addEventListener) mq.addEventListener("change", () => applyPanelStyle());
     }
-    _position();
 
     async function refresh() {
       const u = await user.getCurrent();
+      rerenderSections();
       if (!u) {
         avatarEl.removeAttribute("src");
         nameEl.textContent = "未登录";
         dot.className = "lsb-dot lsb-guest";
-        dot.title = "未登录";
+        dot.title = LSB.i18n.t("signin.status.guest");
         signinText.hidden = true;
         signinBtn.hidden = true;
         $("rank-row").hidden = true;
@@ -1130,7 +1303,6 @@
         autoInput.checked = !!signin.getAutoSignin();
       }
 
-      const signinText = $("signin-text");
       try {
         const s = await signin.getStatus();
         const dotCls = {
@@ -1161,7 +1333,7 @@
     refresh().catch((e) => log.warn(e));
 
     return { name: "ui", refresh };
-  }, ["config", "dom", "events", "user", "signin"]);
+  }, ["config", "dom", "events", "user", "signin", "panelStyle", "notif"]);
 
   // =====================================================================
   // module: debug  (console banner + env dump)
