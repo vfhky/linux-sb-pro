@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-11T16:59:13.108Z
+ * built: 2026-08-12T01:21:22.130Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -72,7 +72,387 @@
   "use strict";
 
   // ----- guard: run once per page ---------------------------------------
-  if (root.LSB && root.LSB.__booted) return;
+  
+;/* === core inlined === */
+// Generate CSS rules for the floating panel position + theme.  Keeping
+// the rule emission in one place means adding a new position or theme
+// is a single config edit; the public build is data-driven end to end.
+
+function panelPositionCss(positions) {
+  const sides = ["top", "right", "bottom", "left"];
+  return Object.entries(positions)
+    .map(([pos, off]) => {
+      const decls = sides.map((s) => `${s}:${off[s] != null ? off[s] + "px" : "auto"};`).join("");
+      return `#lsb-panel[data-pos="${pos}"]{${decls}}`;
+    })
+    .join("\n");
+}
+
+function panelThemeCss(palettes) {
+  return Object.entries(palettes)
+    .map(([name, p]) => {
+      const decls = [
+        `--lsb-bg:${p.bg}`,
+        `--lsb-fg:${p.fg}`,
+        `--lsb-border:${p.border || "transparent"}`,
+        `--lsb-shadow:${p.shadow || "none"}`,
+      ].join(";");
+      return `#lsb-panel[data-theme="${name}"]{${decls};}`;
+    })
+    .join("\n");
+}
+
+;
+// Tiny registry of "panel sections".  Each module can contribute a
+// section to the expanded panel; the registry returns them in order.
+// Sections are pure: they receive the current state and return an
+// element descriptor; ui renders them.
+function createSectionRegistry() {
+  const sections = new Map();
+
+  function register(name, def) {
+    if (!name || typeof def !== "object" || typeof def.render !== "function") {
+      throw new Error("dom-sections: bad def for " + name);
+    }
+    sections.set(name, { order: def.order || 0, render: def.render, hidden: def.hidden || (() => false) });
+  }
+  function unregister(name) { sections.delete(name); }
+  function list() { return Array.from(sections.entries()).sort((a, b) => a[1].order - b[1].order); }
+  function render(ctx) {
+    let innerHTML = "";
+    for (const [, def] of list()) {
+      if (def.hidden(ctx)) continue;
+      const r = def.render(ctx);
+      if (r && r.innerHTML != null) innerHTML += r.innerHTML;
+    }
+    return { innerHTML };
+  }
+  return { register, unregister, list, render };
+}
+
+;
+// Minimal i18n helper.  Locale fallback chain: exact match -> language
+// root (zh-CN -> zh) -> explicit fallback locale -> en -> key itself.
+function createI18n({ locale = "en", fallback = "en" } = {}) {
+  const table = {};
+  function add(map) { Object.assign(table, map); }
+  function setLocale(loc) { locale = loc; }
+  function pick(strings, loc) {
+    if (!strings) return null;
+    if (strings[loc] != null) return strings[loc];
+    const root = loc.split("-")[0];
+    if (strings[root] != null) return strings[root];
+    if (strings[fallback] != null) return strings[fallback];
+    if (strings.en != null) return strings.en;
+    return null;
+  }
+  function t(key, loc) {
+    const useLoc = loc || locale;
+    const v = pick(table[key], useLoc);
+    return v != null ? v : key;
+  }
+  return { add, setLocale, t, get locale() { return locale; } };
+}
+
+;
+// Build-time inliner for lib/*.mjs.  Lists files in alphabetical order
+// (deterministic), strips the `export` keyword so the result runs as
+// a script body, and concatenates with `;\n` between files.
+import { readdirSync, readFileSync } from "node:fs";
+
+function listLibFiles(libDir) {
+  return readdirSync(libDir)
+    .filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs"))
+    .sort()
+    .map((f) => `${libDir}/${f}`);
+}
+
+function bundle(files) {
+  return files
+    .map((f) => readFileSync(f, "utf8"))
+    .map((src) => src.replace(/^export\s+/gm, ""))
+    .join("\n;\n")
+    .trim();
+}
+
+;
+// Theme palettes.  Add a new theme here + a matching CSS rule and it
+// works everywhere automatically.  "auto" is a meta-theme resolved by
+// the ui module against prefers-color-scheme.
+const PALETTES = {
+  light: { bg: "#ffffff", fg: "#1f2937", border: "rgba(0,0,0,0.08)", shadow: "0 8px 24px rgba(0,0,0,0.12)" },
+  dark:  { bg: "rgba(20,22,28,0.94)", fg: "#eee", border: "rgba(255,255,255,0.08)", shadow: "0 8px 24px rgba(0,0,0,0.35)" },
+};
+
+const THEMES = ["light", "dark", "auto"];
+
+function listThemes() { return THEMES.slice(); }
+
+function getPalette(name) {
+  if (name === "auto") throw new Error("palettes: auto is a meta-theme, resolve via ui");
+  if (!PALETTES[name]) throw new Error("palettes: unknown theme " + name);
+  return PALETTES[name];
+}
+
+;
+// Generic poller: tick at a fixed interval while the document is visible,
+// with an optional backoff after N consecutive errors.  Inject the
+// `document` object so tests can run without a real DOM.
+function makePoller({ name, onTick, intervalMs = 60_000, backoffAfter = 3, backoffMs = 5 * 60_000, document: doc = (typeof document !== "undefined" ? document : null) } = {}) {
+  if (typeof onTick !== "function") throw new Error("makePoller: onTick must be a function");
+  if (!(intervalMs > 0)) throw new Error("makePoller: intervalMs must be > 0");
+  if (!name) throw new Error("makePoller: name required");
+
+  const poller = {
+    name,
+    state: "stopped",
+    start, stop, tick,
+    get currentInterval() { return backoffUntil > Date.now() ? backoffMs : intervalMs; },
+  };
+
+  let timer = null;
+  let errors = 0;
+  let backoffUntil = 0;
+  let runningTick = false;
+  let visibilityHandler = null;
+
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(runOnce, poller.currentInterval);
+  }
+
+  async function runOnce() {
+    if (poller.state !== "running") return;
+    if (doc && doc.hidden) { schedule(); return; }
+    if (runningTick) { schedule(); return; }
+    runningTick = true;
+    try {
+      await onTick();
+      errors = 0;
+      backoffUntil = 0;
+    } catch (err) {
+      errors++;
+      if (errors >= backoffAfter) backoffUntil = Date.now() + backoffMs;
+      if (typeof console !== "undefined") console.warn(`[${name}] tick failed (${errors})`, err);
+    } finally {
+      runningTick = false;
+      schedule();
+    }
+  }
+
+  function start() {
+    if (poller.state === "running") return;
+    poller.state = "running";
+    if (doc && doc.addEventListener) {
+      visibilityHandler = () => { if (!doc.hidden) runOnce(); };
+      doc.addEventListener("visibilitychange", visibilityHandler);
+    }
+    runOnce();
+  }
+
+  function stop() {
+    if (poller.state === "stopped") return;
+    poller.state = "stopped";
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (doc && doc.removeEventListener && visibilityHandler) {
+      doc.removeEventListener("visibilitychange", visibilityHandler);
+      visibilityHandler = null;
+    }
+  }
+
+  async function tick() { await runOnce(); }
+
+  return poller;
+}
+
+;
+// Tiny settings registry.  Each registered setting gets a getter and a
+// setter with type-aware validation, plus a pub/sub for change events.
+// Backed by GM_getValue / GM_setValue (so values persist across reloads).
+function createRegistry() {
+  const defs = new Map();
+  const listeners = new Set();
+  const keyListeners = new Map();
+
+  function validate(def, v) {
+    if (def.type === "boolean") return typeof v === "boolean" ? v : null;
+    if (def.type === "enum") return def.options.includes(v) ? v : null;
+    if (def.type === "string") return typeof v === "string" ? v : null;
+    if (def.type === "number") return Number.isFinite(v) ? v : null;
+    return null;
+  }
+
+  function get(key) {
+    const def = defs.get(key);
+    if (!def) throw new Error("settings.get: unknown key " + key);
+    let value = def.default;
+    const raw = typeof GM_getValue === "function" ? GM_getValue(def.storageKey, null) : null;
+    const v = validate(def, raw);
+    if (v !== null) value = v;
+    const set = (next) => {
+      if (validate(def, next) === null) throw new Error("settings: invalid value for " + key + ": " + next);
+      value = next;
+      if (typeof GM_setValue === "function") GM_setValue(def.storageKey, next);
+      for (const fn of keyListeners.get(key) || []) { try { fn(next); } catch (e) { if (typeof console !== "undefined") console.warn(e); } }
+      for (const fn of listeners) { try { fn({ key, value: next }); } catch (e) { if (typeof console !== "undefined") console.warn(e); } }
+    };
+    const subscribe = (fn) => {
+      if (!keyListeners.has(key)) keyListeners.set(key, new Set());
+      keyListeners.get(key).add(fn);
+      return () => keyListeners.get(key).delete(fn);
+    };
+    return { get: () => value, set, subscribe, def };
+  }
+
+  function register(def) {
+    if (!def || !def.key) throw new Error("settings.register: key required");
+    if (!def.type) throw new Error("settings.register: type required for " + def.key);
+    def.storageKey = def.storageKey || ("lsb:setting:" + def.key);
+    def.group = def.group || "general";
+    def.label = typeof def.label === "string" ? { en: def.label } : (def.label || { en: def.key });
+    defs.set(def.key, def);
+  }
+
+  function list() {
+    return Array.from(defs.values()).sort((a, b) => {
+      if (a.group !== b.group) return a.group.localeCompare(b.group);
+      return a.key.localeCompare(b.key);
+    });
+  }
+  function groups() { return Array.from(new Set(list().map((d) => d.group))); }
+  function on(event, fn) {
+    if (event !== "change") throw new Error("settings.on: only change supported");
+    listeners.add(fn);
+    return () => listeners.delete(fn);
+  }
+
+  return { register, get, list, groups, on };
+}
+;/* === lib inlined === */
+// Generate HTML fixtures for notif parser tests.  Variants cover the
+// site layouts we know about, plus a few edges (malformed, empty,
+// overflow).  Kept pure so it runs anywhere (node, browser, etc).
+function renderItem({ id, mention, href, title, age }) {
+  return (
+    `<li data-id="${id}" data-mention="${mention ? "true" : "false"}">` +
+    `<a href="${href}">${title}</a>` +
+    (age ? `<time>${age}</time>` : "") +
+    `</li>`
+  );
+}
+
+function buildFixture({ items = [], unread = 0, mode = "list" } = {}) {
+  if (mode === "empty") {
+    return `<!doctype html><html><body>` +
+      `<h1>通知中心</h1>` +
+      `<ul class="notif-list"></ul>` +
+      `<span class="notif-unread-count">0</span>` +
+      `</body></html>`;
+  }
+  if (mode === "malformed") return "<html></html>";
+  return `<!doctype html><html><body>` +
+    `<h1>通知中心</h1>` +
+    `<ul class="notif-list">${items.map(renderItem).join("")}</ul>` +
+    `<span class="notif-unread-count">${unread}</span>` +
+    `</body></html>`;
+}
+
+const DEFAULT_ITEMS = [
+  { id: 1, mention: true,  href: "/topic/100#reply-1", title: "@vfhky 在【测试主题】回复了你", age: "2 分钟前" },
+  { id: 2, mention: false, href: "/topic/101",        title: "你关注的主题【新主题】有新回复", age: "10 分钟前" },
+  { id: 3, mention: true,  href: "/topic/102#reply-5", title: "@other 在【另一主题】提到了你", age: "1 小时前" },
+];
+
+;
+// Parse a linux.sb notifications page into { unread, list }.
+// Pure: takes HTML text, returns a plain object.  MAX_LIST caps the
+// returned list size; unread is reported as the raw count even when
+// the list is capped (the panel can show "5 of N").
+const MAX_LIST = 5;
+
+function extractUnread(html) {
+  const m = html.match(/class\s*=\s*["'][^"']*notif-unread-count["'][^>]*>\s*(\d+)/i);
+  return m ? Number(m[1]) : 0;
+}
+
+function extractList(html) {
+  const block = html.match(/<ul[^>]*class\s*=\s*["'][^"']*\bnotif-list\b[^"']*["'][\s\S]*?<\/ul>/i);
+  if (!block) return [];
+  const items = [];
+  const liRe = /<li\b([^>]*)>([\s\S]*?)<\/li>/gi;
+  let m;
+  while ((m = liRe.exec(block[0])) !== null) {
+    const attrs = m[1] || "";
+    const body = m[2] || "";
+    const idMatch = attrs.match(/data-id\s*=\s*["']([^"']+)/i);
+    const mention = /data-mention\s*=\s*["']true/i.test(attrs);
+    const aMatch = body.match(/<a\b[^>]*href\s*=\s*["']([^"']+)[^>]*>([\s\S]*?)<\/a>/i);
+    if (!aMatch) continue;
+    const url = aMatch[1];
+    const title = aMatch[2].replace(/<[^>]+>/g, "").trim();
+    items.push({ id: idMatch ? idMatch[1] : url, url, title, isMention: mention });
+    if (items.length >= MAX_LIST) break;
+  }
+  return items;
+}
+
+function parseNotifications(html) {
+  if (typeof html !== "string" || !html) return { unread: 0, list: [] };
+  return { unread: extractUnread(html), list: extractList(html) };
+}
+
+;
+// Try each candidate URL in order.  Return the first one whose HTML body
+// contains either a notification-shaped heading or a list-shaped element.
+// Pure: depends only on the http adapter the caller injects.
+const HEADING_RE = /<h\d[^>]*>\s*(?:通知(?:中心)?|提醒|消息|inbox|notifications?)\s*</i;
+const LIST_CLASS_RE = /class\s*=\s*["'][^"']*\b(?:notif|notice|inbox|message)-?list\b/i;
+
+function isNotifPage(html) {
+  return HEADING_RE.test(html) || LIST_CLASS_RE.test(html);
+}
+
+async function probeEndpoint(http, apiBase, candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const base = String(apiBase || "").replace(/\/+$/, "");
+  for (const path of candidates) {
+    const url = base + path;
+    const html = await http.getHtml(url);
+    if (isNotifPage(html || "")) return url;
+  }
+  return null;
+}
+
+;
+// Storage adapter for the floating panel's position and theme.  Pure:
+// takes a tiny { get, set } adapter (so tests can pass a Map-backed
+// stub) and a key prefix; returns getters and setters with validation.
+const POS = new Set(["TL", "TR", "BL", "BR"]);
+const THEME = new Set(["light", "dark", "auto"]);
+
+const DEFAULT_POS = "BR";
+const DEFAULT_THEME = "auto";
+
+function validatePos(v) { return POS.has(v) ? v : null; }
+function validateTheme(v) { return THEME.has(v) ? v : null; }
+
+function makeStore(gm, prefix) {
+  const POS_KEY = prefix + "pos";
+  const THEME_KEY = prefix + "theme";
+  return {
+    getPos() { return validatePos(gm.get(POS_KEY)) || DEFAULT_POS; },
+    setPos(v) {
+      if (!validatePos(v)) throw new Error("invalid pos: " + v);
+      gm.set(POS_KEY, v);
+    },
+    getTheme() { return validateTheme(gm.get(THEME_KEY)) || DEFAULT_THEME; },
+    setTheme(v) {
+      if (!validateTheme(v)) throw new Error("invalid theme: " + v);
+      gm.set(THEME_KEY, v);
+    },
+  };
+}
+;if (root.LSB && root.LSB.__booted) return;
   const LSB = (root.LSB = { __booted: true, version: "1.0.1" });
 
   // =====================================================================
@@ -102,7 +482,27 @@
     ui: {
       panelPosition: "bottom-right", // bottom-right | bottom-left | top-right | top-left
       panelCollapsible: true,
+      // Data-driven: add a new theme by adding to this list + a matching
+      // palette in core/palettes.mjs.  Add a new position by adding to
+      // the positions map below; CSS is generated from it.
+      themes: ["light", "dark", "auto"],
+      positions: {
+        BR: { bottom: 12, right: 12 },
+        BL: { bottom: 12, left: 12 },
+        TR: { top: 12, right: 12 },
+        TL: { top: 12, left: 12 },
+      },
     },
+    notif: {
+      // Endpoint candidates; first one that returns a notif-shaped page wins.
+      // Add or remove paths here when the site changes.
+      candidates: ["/notifications", "/notice", "/user/notifications"],
+      // Polling config (passed to core/poller.mjs).
+      intervalMs: 60_000,
+      backoffAfter: 3,
+      backoffMs: 5 * 60_000,
+    },
+    i18n: { defaultLocale: "zh-CN", fallbackLocale: "en" },
     signin: {
       autoSignin: false, // when true, automatically sign in if pending
     },
@@ -283,7 +683,57 @@
   // =====================================================================
   // api/linuxSb  (selectors, URL patterns, response shape)
   // =====================================================================
-  LSB.api = LSB.api || {};
+  // =====================================================================
+  // core/i18n, core/settings, core/palettes, core/css, core/dom-sections
+  // (inlined at build time from core/*.mjs; the symbols are in the
+  // outer scope so this block can use them directly).
+  // =====================================================================
+  LSB.i18n = (typeof createI18n === "function")
+    ? createI18n({ locale: LSB.config.i18n.defaultLocale, fallback: LSB.config.i18n.fallbackLocale })
+    : { t: (k) => k, add: () => {}, setLocale: () => {} };
+  LSB.i18n.add({
+    "panel.title":         { zh: "面板",     en: "Panel" },
+    "panel.settings":      { zh: "设置",     en: "Settings" },
+    "panel.close":         { zh: "关闭",     en: "Close" },
+    "panel.pos":           { zh: "位置",     en: "Position" },
+    "panel.theme":         { zh: "主题",     en: "Theme" },
+    "panel.pos.BR":        { zh: "右下",     en: "Bottom-right" },
+    "panel.pos.BL":        { zh: "左下",     en: "Bottom-left" },
+    "panel.pos.TR":        { zh: "右上",     en: "Top-right" },
+    "panel.pos.TL":        { zh: "左上",     en: "Top-left" },
+    "panel.theme.auto":    { zh: "跟随系统", en: "Follow system" },
+    "panel.theme.light":   { zh: "浅色",     en: "Light" },
+    "panel.theme.dark":    { zh: "深色",     en: "Dark" },
+    "notif.title":         { zh: "通知",     en: "Notifications" },
+    "notif.empty":         { zh: "暂无通知", en: "No notifications" },
+    "signin.status.signed":   { zh: "已签到",  en: "Signed in" },
+    "signin.status.unsigned": { zh: "未签到",  en: "Not signed in" },
+    "signin.status.guest":    { zh: "请先登录", en: "Please sign in" },
+    "signin.status.unknown":  { zh: "状态不明", en: "Unknown" },
+    "signin.auto":         { zh: "自动签到",  en: "Auto sign-in" },
+  });
+  LSB.settings = (typeof createRegistry === "function") ? createRegistry() : null;
+  LSB.sections = (typeof createSectionRegistry === "function") ? createSectionRegistry() : null;
+
+  if (LSB.settings) {
+    LSB.settings.register({
+      key: "panel.pos", type: "enum", group: "panel",
+      label: { zh: "位置", en: "Position" },
+      default: "BR", options: Object.keys(LSB.config.ui.positions),
+    });
+    LSB.settings.register({
+      key: "panel.theme", type: "enum", group: "panel",
+      label: { zh: "主题", en: "Theme" },
+      default: "auto", options: LSB.config.ui.themes,
+    });
+    LSB.settings.register({
+      key: "signin.auto", type: "boolean", group: "signin",
+      label: { zh: "自动签到", en: "Auto sign-in" },
+      default: false,
+    });
+  }
+
+    LSB.api = LSB.api || {};
   LSB.api.linuxSb = {
     isHome(href) {
       const u = LSB.utils.parseUrl(href || location.href);

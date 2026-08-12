@@ -93,7 +93,27 @@
     ui: {
       panelPosition: "bottom-right", // bottom-right | bottom-left | top-right | top-left
       panelCollapsible: true,
+      // Data-driven: add a new theme by adding to this list + a matching
+      // palette in core/palettes.mjs.  Add a new position by adding to
+      // the positions map below; CSS is generated from it.
+      themes: ["light", "dark", "auto"],
+      positions: {
+        BR: { bottom: 12, right: 12 },
+        BL: { bottom: 12, left: 12 },
+        TR: { top: 12, right: 12 },
+        TL: { top: 12, left: 12 },
+      },
     },
+    notif: {
+      // Endpoint candidates; first one that returns a notif-shaped page wins.
+      // Add or remove paths here when the site changes.
+      candidates: ["/notifications", "/notice", "/user/notifications"],
+      // Polling config (passed to core/poller.mjs).
+      intervalMs: 60_000,
+      backoffAfter: 3,
+      backoffMs: 5 * 60_000,
+    },
+    i18n: { defaultLocale: "zh-CN", fallbackLocale: "en" },
     signin: {
       autoSignin: false, // when true, automatically sign in if pending
     },
@@ -274,7 +294,57 @@
   // =====================================================================
   // api/linuxSb  (selectors, URL patterns, response shape)
   // =====================================================================
-  LSB.api = LSB.api || {};
+  // =====================================================================
+  // core/i18n, core/settings, core/palettes, core/css, core/dom-sections
+  // (inlined at build time from core/*.mjs; the symbols are in the
+  // outer scope so this block can use them directly).
+  // =====================================================================
+  LSB.i18n = (typeof createI18n === "function")
+    ? createI18n({ locale: LSB.config.i18n.defaultLocale, fallback: LSB.config.i18n.fallbackLocale })
+    : { t: (k) => k, add: () => {}, setLocale: () => {} };
+  LSB.i18n.add({
+    "panel.title":         { zh: "面板",     en: "Panel" },
+    "panel.settings":      { zh: "设置",     en: "Settings" },
+    "panel.close":         { zh: "关闭",     en: "Close" },
+    "panel.pos":           { zh: "位置",     en: "Position" },
+    "panel.theme":         { zh: "主题",     en: "Theme" },
+    "panel.pos.BR":        { zh: "右下",     en: "Bottom-right" },
+    "panel.pos.BL":        { zh: "左下",     en: "Bottom-left" },
+    "panel.pos.TR":        { zh: "右上",     en: "Top-right" },
+    "panel.pos.TL":        { zh: "左上",     en: "Top-left" },
+    "panel.theme.auto":    { zh: "跟随系统", en: "Follow system" },
+    "panel.theme.light":   { zh: "浅色",     en: "Light" },
+    "panel.theme.dark":    { zh: "深色",     en: "Dark" },
+    "notif.title":         { zh: "通知",     en: "Notifications" },
+    "notif.empty":         { zh: "暂无通知", en: "No notifications" },
+    "signin.status.signed":   { zh: "已签到",  en: "Signed in" },
+    "signin.status.unsigned": { zh: "未签到",  en: "Not signed in" },
+    "signin.status.guest":    { zh: "请先登录", en: "Please sign in" },
+    "signin.status.unknown":  { zh: "状态不明", en: "Unknown" },
+    "signin.auto":         { zh: "自动签到",  en: "Auto sign-in" },
+  });
+  LSB.settings = (typeof createRegistry === "function") ? createRegistry() : null;
+  LSB.sections = (typeof createSectionRegistry === "function") ? createSectionRegistry() : null;
+
+  if (LSB.settings) {
+    LSB.settings.register({
+      key: "panel.pos", type: "enum", group: "panel",
+      label: { zh: "位置", en: "Position" },
+      default: "BR", options: Object.keys(LSB.config.ui.positions),
+    });
+    LSB.settings.register({
+      key: "panel.theme", type: "enum", group: "panel",
+      label: { zh: "主题", en: "Theme" },
+      default: "auto", options: LSB.config.ui.themes,
+    });
+    LSB.settings.register({
+      key: "signin.auto", type: "boolean", group: "signin",
+      label: { zh: "自动签到", en: "Auto sign-in" },
+      default: false,
+    });
+  }
+
+    LSB.api = LSB.api || {};
   LSB.api.linuxSb = {
     isHome(href) {
       const u = LSB.utils.parseUrl(href || location.href);
