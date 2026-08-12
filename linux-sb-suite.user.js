@@ -1308,7 +1308,9 @@
       if (def.type === "boolean") s.set(el.checked);
       else s.set(el.getAttribute("data-lsb-value") || el.value);
     });
-    $("settings-close").addEventListener("click", () => { settingsHost.hidden = true; });
+    settingsHost.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-lsb=settings-close]")) settingsHost.hidden = true;
+    });
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
       renderSettings();

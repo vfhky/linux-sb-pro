@@ -57,3 +57,8 @@ _inspect.mjs
 # disposable CDP probe screenshots
 _probe*.png
 
+
+# disposable CDP probe helpers (used during dev/debug, do not commit)
+/_*.mjs
+/_*.png
+
