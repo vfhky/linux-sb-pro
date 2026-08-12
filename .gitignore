@@ -62,3 +62,6 @@ _probe*.png
 /_*.mjs
 /_*.png
 
+
+# raw third-party userscript sources captured for analysis (large; replace with re-fetch)
+docs/superpowers/specs/*.user.js
