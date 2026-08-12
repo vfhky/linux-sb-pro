@@ -32,3 +32,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+# disposable Chrome profiles for live site probes
+.tmp-probe/
+.any-chrome-profile/
+
