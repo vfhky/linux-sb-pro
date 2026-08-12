@@ -2,7 +2,7 @@
 import { chromium } from "playwright";
 import { writeFile } from "node:fs/promises";
 
-const CDP_URL = "http://127.0.0.1:9222";
+const CDP_URL = process.env.LSB_CDP_URL || "http://127.0.0.1:9444";
 const DEFAULT_PATTERN = "linux.sb";
 
 function usage() {
@@ -166,7 +166,7 @@ async function main() {
   if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") usage();
 async function cmdTmUpdate() {
   const b = await connect();
-  const TM_EXT = "chrome-extension://gcalenpjmijncebpfijmoaglllgpjagf";
+  const TM_EXT = "chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo";
   const SCRIPT_NAME = "linux.sb Suite";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

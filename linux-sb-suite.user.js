@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.1.3
+// @version      1.1.5
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @author       vfhky
 // @match        https://linux.sb/*
@@ -64,7 +64,7 @@
 
   // ----- guard: run once per page ---------------------------------------
   if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.1.3" });
+  const LSB = (root.LSB = { __booted: true, version: "1.1.5" });
 
   // =====================================================================
   // core/config
@@ -482,75 +482,23 @@
      *   source ∈ "nav-mine" | "avatar-link" | "user-page" | "stored"
      */
     async function readFromDom() {
-      // 1. nav-mine in top bar (tells us logged-in state and user id).
-      const navMine = dom.$("a.nav-mine");
-      if (navMine) {
-        const text = dom.text(navMine);
-        const href = dom.attr(navMine, "href") || "";
-        if (/\/login\b/.test(href) || /登录/.test(text)) {
-          return null;
-        }
-        const id = _userIdFromHref(href);
-        // The top-bar link only carries a literal label, not the real nickname.
-        // Pull nickname / avatar / rank from the right sidebar card.
-        const card = dom.$(LSB.api.linuxSb.selectors.userCard);
-        const nameEl = card ? dom.$(LSB.api.linuxSb.selectors.userNameLink, card) : null;
-        const avatarWrap = card ? dom.$(LSB.api.linuxSb.selectors.userAvatar, card) : null;
-        const avatarImg  = avatarWrap ? dom.$("img.avatar-img", avatarWrap) : null;
-        const rankEl     = card ? dom.$(LSB.api.linuxSb.selectors.userRank, card) : null;
-        const pointsEl   = card ? dom.$(LSB.api.linuxSb.selectors.userPoints, card) : null;
-        const nickname   = nameEl ? dom.text(nameEl) : null;
-        let avatarUrl    = avatarImg ? dom.src(avatarImg) : null;
-        let avatarIsDicebear = !!avatarUrl && /\/avatars\/|dicebear/i.test(avatarUrl);
-        if (!avatarUrl && avatarWrap && avatarWrap.classList.contains("visitor-avatar")) {
-          // Visitor variant: synthesise a stable placeholder from the id.
-          avatarUrl = LSB.api.linuxSb.avatarUrl.dicebearForUserId(id || "guest");
-          avatarIsDicebear = true;
-        }
-        // Rank text is "笔友 · 积分 256"; points may not have a dedicated element.
-        const rankText = rankEl ? dom.text(rankEl) : null;
-        let points = null;
-        if (pointsEl) {
-          const m = dom.text(pointsEl).match(/(\d+)/);
-          if (m) points = Number(m[1]);
-        } else if (rankText) {
-          const m = rankText.match(/(\d+)/);
-          if (m) points = Number(m[1]);
-        }
-        return {
-          id: id || null,
-          nickname: nickname || null,
-          avatarUrl: avatarUrl || null,
-          avatarIsDicebear,
-          profileUrl: href ? dom.absUrl(href) : null,
-          rank: rankText || null,
-          points,
-          isLoggedIn: true,
-          source: avatarImg ? "user-card" : "user-card-visitor",
-        };
+      // Delegate to the pure parser in core (inlined from lib/user-read.mjs).
+      // The lib enforces the "two-page safety" rule: on a /user/<other-id>
+      // page, the sidebar card belongs to the OTHER user, so we refuse to
+      // read it and return only what nav-mine tells us (id, profileUrl,
+      // source = "nav-mine-only"). Consumers in getCurrent() preserve
+      // nickname/avatar/rank/points from cache in that case.
+      if (typeof readUserFromDocument !== "function") {
+        log.warn("readUserFromDocument missing from inlined lib; readFromDom disabled");
+        return null;
       }
-      // 2. any avatar-profile-link on page (post author etc.)
-      const link = dom.$("a.avatar-profile-link");
-      if (link) {
-        const href = dom.attr(link, "href") || "";
-        const img = dom.$("img", link);
-        const id = _userIdFromHref(href);
-        if (id) {
-          return {
-            id,
-            nickname: dom.attr(img, "alt") || null,
-            avatarUrl: dom.src(img) || null,
-            avatarIsDicebear: !!img && /dicebear/i.test(dom.src(img) || ""),
-            profileUrl: dom.absUrl(href),
-            isLoggedIn: false, // unknown from here
-            source: "avatar-link",
-          };
-        }
-      }
-      return null;
+      return readUserFromDocument(document, {
+        currentPath: location.pathname,
+        absUrl: dom.absUrl,
+        dicebearForUserId: LSB.api.linuxSb.avatarUrl.dicebearForUserId,
+      });
     }
-
-    /**
+     /**
      * Fetch the user page and parse richer info (signin count, joined date, etc.).
      * Only used as a fallback if DOM is incomplete.
      */
@@ -597,6 +545,21 @@
       try { fromDom = await readFromDom(); } catch (err) { log.warn("dom read failed", err); }
       const cached = LSB.storage.get("user.current");
       if (fromDom) {
+        // Two-page safety: if the lib only saw nav-mine (e.g. we are on
+        // someone else's /user/<id> page), preserve nickname/avatar/rank/
+        // points from the previous good read so the panel keeps showing
+        // the LOGGED-IN user's identity. We still trust the fresh id
+        // (it must match the cached id, otherwise something is wrong).
+        if (fromDom.source === "nav-mine-only" && cached && cached.id === fromDom.id) {
+          const merged = {
+            ...cached,
+            id: fromDom.id,
+            profileUrl: fromDom.profileUrl || cached.profileUrl,
+            isLoggedIn: true,
+            source: "nav-mine-only",
+          };
+          return merged;
+        }
         // Persist a normalized version.
         const normalized = normalize(fromDom);
         LSB.storage.set("user.current", normalized, LSB.config.storage.defaultTTL);
@@ -687,20 +650,13 @@
 
     /** Fetch /daily_checkin and parse status + csrf. */
     async function _fetchStatus() {
+      // Delegate parsing to the structure-agnostic parseCheckinPage in
+      // core/ (inlined from lib/checkin-parse.mjs). It handles both the
+      // home-sidebar card AND the dedicated /daily_checkin page layout
+      // (.admin-plugin-summary > span), so we never have to update
+      // hardcoded selectors here when the site changes.
       const html = await LSB.http.getHtml(CHECKIN_URL);
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      const sub = doc.querySelector(".daily-checkin-sub");
-      const s = sub ? _statusFromNode({
-        textContent: sub.textContent,
-      }) : null;
-      const btn = doc.querySelector(LSB.api.linuxSb.selectors.checkinBtn);
-      const csrfInput = doc.querySelector(`form[action="/daily_checkin"] input[name="_csrf"]`);
-      return {
-        status: s || "unknown",
-        source: "http-fetch",
-        csrf: csrfInput ? csrfInput.getAttribute("value") : null,
-        hasForm: !!btn,
-      };
+      return { ...parseCheckinPage(html), source: "http-fetch" };
     }
 
     /** Public: get current signin status. */

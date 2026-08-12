@@ -62,4 +62,18 @@ export default async function run() {
     const out = parseCheckinPage(html);
     assert.equal(out.status, "signed-in");
   }
+
+  // --- Regression: real /daily_checkin page (live capture, 2026-08-13) ---
+  // Bug: _fetchStatus() used hardcoded ".daily-checkin-sub" which does not
+  // exist on the dedicated checkin page; the real status element is
+  // ".admin-plugin-summary > span". This test pins the real-page behavior
+  // so a future regression on the parser is caught.
+  {
+    const out = parseCheckinPage(fx("daily-checkin-done-real.html"));
+    assert.equal(out.status, "signed-in", "real /daily_checkin page should parse as signed-in");
+    assert.equal(out.hasForm, false, "signed-in real page should not have a form");
+    assert.equal(out.csrf, null, "signed-in real page should not have csrf");
+    assert.equal(out.stats.streak, 4, "real page streak is 4");
+  }
+
 }

@@ -8,7 +8,10 @@ import { extname, join } from 'node:path';
 
 const PORT = Number(process.argv[2] || process.env.LSB_SERVE_PORT || 8123);
 const ROOT = process.cwd();
-const SCRIPT = 'linux-sb-suite.user.js';
+// Default to the BUILT dist version so Tampermonkey always gets a
+// self-contained userscript with the inlined lib/core bundles. Override
+// with LSB_SERVE_FILE if you need to serve the raw dev source.
+const SCRIPT = process.env.LSB_SERVE_FILE || 'dist/linux-sb-suite.user.js';
 
 const MIME = {
   '.js': 'text/javascript; charset=utf-8',
@@ -22,6 +25,10 @@ const server = createServer((req, res) => {
   try {
     let url = req.url.split('?')[0];
     if (url === '/' || url === '/index.html') url = '/' + SCRIPT;
+  // Also map the conventional name to the same served file so the
+  // dev source's @updateURL (http://127.0.0.1:PORT/linux-sb-suite.user.js)
+  // resolves to the built dist file.
+  if (url === '/linux-sb-suite.user.js') url = '/' + SCRIPT;
     const filePath = join(ROOT, url.replace(/^\//, ''));
     if (!filePath.startsWith(ROOT)) { res.writeHead(403); res.end('forbidden'); return; }
     const stat = statSync(filePath);

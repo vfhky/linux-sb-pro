@@ -1,0 +1,17 @@
+    async function readFromDom() {
+      // Delegate to the pure parser in core (inlined from lib/user-read.mjs).
+      // The lib enforces the "two-page safety" rule: on a /user/<other-id>
+      // page, the sidebar card belongs to the OTHER user, so we refuse to
+      // read it and return only what nav-mine tells us (id, profileUrl,
+      // source = "nav-mine-only"). Consumers in getCurrent() preserve
+      // nickname/avatar/rank/points from cache in that case.
+      if (typeof readUserFromDocument !== "function") {
+        log.warn("readUserFromDocument missing from inlined lib; readFromDom disabled");
+        return null;
+      }
+      return readUserFromDocument(document, {
+        currentPath: location.pathname,
+        absUrl: dom.absUrl,
+        dicebearForUserId: LSB.api.linuxSb.avatarUrl.dicebearForUserId,
+      });
+    }
