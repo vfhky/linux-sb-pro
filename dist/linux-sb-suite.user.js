@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         linux.sb Suite
+// @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.1.0
-// @description  Floating panel for linux.sb with unread notifications, persisted panel position and theme, one-click daily check-in, and a settings popover. Modular core (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) plus user/signin/notif/panelStyle/ui modules that share a settings registry.
+// @version      1.1.1
+// @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @downloadURL https://update.greasyfork.org/scripts/590905.user.js
 // @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
 // @license     Apache-2.0
@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-12T01:25:20.896Z
+ * built: 2026-08-12T01:43:50.141Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -453,7 +453,7 @@ function makeStore(gm, prefix) {
   };
 }
 ;if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.1.0" });
+  const LSB = (root.LSB = { __booted: true, version: "1.1.1" });
 
   // =====================================================================
   // core/config

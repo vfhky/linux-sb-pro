@@ -36,3 +36,6 @@ Thumbs.db
 .tmp-probe/
 .any-chrome-profile/
 
+
+# additional disposable probe profiles (was .tmp-probe/ already, this catches the suffixed variants)
+.tmp-probe*/

@@ -1,8 +1,8 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "vfhky",
   "namespace": "https://github.com/vfhky/linux-sb-pro",
-  "description": "Floating panel for linux.sb with unread notifications, persisted panel position and theme, one-click daily check-in, and a settings popover. Modular core (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) plus user/signin/notif/panelStyle/ui modules that share a settings registry.",
+  "description": "为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.",
   "license": "Apache-2.0",
   "updateURL": "https://update.greasyfork.org/scripts/590905.meta.js",
   "downloadURL": "https://update.greasyfork.org/scripts/590905.user.js"

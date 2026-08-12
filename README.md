@@ -7,7 +7,7 @@
 ## Install
 
 1. Install the [Tampermonkey](https://www.tampermonkey.net/) extension.
-2. Install the script from [Greasy Fork](https://greasyfork.org/en/scripts/590905-linux-sb-suite) (search for `linux.sb Suite`).
+2. 从 [Greasy Fork](https://greasyfork.org/en/scripts/590905-linux-sb-suite) 安装脚本（搜索 `linux.sb 助手` 或 `linux.sb Suite` 即可）。/ Install the script from [Greasy Fork](https://greasyfork.org/en/scripts/590905-linux-sb-suite) — search for `linux.sb 助手` or `linux.sb Suite`.
 3. Open <https://linux.sb/> — a small pill appears in the bottom-right corner.
 
 After install, Tampermonkey auto-updates the script from Greasy Fork using the script's built-in `@updateURL`.
