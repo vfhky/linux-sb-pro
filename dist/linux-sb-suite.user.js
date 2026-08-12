@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.0.1
-// @description  Compact floating panel for linux.sb: shows logged-in user, daily check-in status, and an auto-signin toggle. Modular core (logger/storage/events/http/dom) plus a UI module that can be extended for more forum features.
+// @version      1.1.0
+// @description  Floating panel for linux.sb with unread notifications, persisted panel position and theme, one-click daily check-in, and a settings popover. Modular core (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) plus user/signin/notif/panelStyle/ui modules that share a settings registry.
 // @downloadURL https://update.greasyfork.org/scripts/590905.user.js
 // @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
 // @license     Apache-2.0
@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-12T01:23:56.121Z
+ * built: 2026-08-12T01:25:20.896Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -453,7 +453,7 @@ function makeStore(gm, prefix) {
   };
 }
 ;if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.0.1" });
+  const LSB = (root.LSB = { __booted: true, version: "1.1.0" });
 
   // =====================================================================
   // core/config
