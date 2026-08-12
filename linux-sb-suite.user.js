@@ -108,6 +108,12 @@
       // Endpoint candidates; first one that returns a notif-shaped page wins.
       // Add or remove paths here when the site changes.
       candidates: ["/notifications", "/notice", "/user/notifications"],
+      // Build a user-scoped endpoint when the site requires it
+      // (e.g. /user/<id>?tab=notifications). Return null to fall through to candidates.
+      endpoint(userId) {
+        if (userId) return `/user/${userId}?tab=notifications`;
+        return null;
+      },
       // Polling config (passed to core/poller.mjs).
       intervalMs: 60_000,
       backoffAfter: 3,
@@ -837,6 +843,10 @@
       return { name: "notif", init() {} };
     }
 
+    // One-shot cache bust: 1.1.2 cached a wrong endpoint path; 1.1.3 uses
+    // the user-scoped factory. Clear the old value so we re-discover.
+    if (typeof GM_deleteValue === "function") GM_deleteValue("lsb:notif:endpoint");
+
     const state = { unread: 0, list: [], endpoint: null, lastFetchAt: 0, lastError: null };
     LSB.notif = { state, start, stop, refresh };
 
@@ -847,8 +857,19 @@
 
     async function discoverEndpoint() {
       if (state.endpoint) return state.endpoint;
+      // 1) Per-user factory endpoint (preferred when user is known).
+      const uid = (user && user.info && user.info.id) || null;
+      const factoryEndpoint = (typeof config.notif.endpoint === "function")
+        ? config.notif.endpoint(uid) : null;
+      if (factoryEndpoint) {
+        state.endpoint = config.site.apiBase + factoryEndpoint;
+        if (typeof GM_setValue === "function") GM_setValue("lsb:notif:endpoint", state.endpoint);
+        return state.endpoint;
+      }
+      // 2) Cached static endpoint.
       const cached = (typeof GM_getValue === "function") ? GM_getValue("lsb:notif:endpoint", null) : null;
       if (cached) { state.endpoint = cached; return cached; }
+      // 3) Probe static candidates.
       const endpoint = await probeEndpoint(http, config.site.apiBase, config.notif.candidates);
       if (endpoint) {
         state.endpoint = endpoint;
