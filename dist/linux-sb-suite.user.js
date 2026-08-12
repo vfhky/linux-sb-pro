@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-12T01:21:22.130Z
+ * built: 2026-08-12T01:22:25.214Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -1165,6 +1165,34 @@ function makeStore(gm, prefix) {
 
     // module: ui  (floating panel showing user info)
   // =====================================================================
+  LSB.register("panelStyle", function ({ config, events }) {
+    const log = LSB.logger.make("panelStyle");
+    if (!LSB.settings) {
+      log.warn("settings registry unavailable; panelStyle no-op");
+      return { name: "panelStyle", init() {} };
+    }
+    const pos = LSB.settings.get("panel.pos");
+    const theme = LSB.settings.get("panel.theme");
+
+    LSB.panelStyle = {
+      get pos() { return pos.get(); },
+      get theme() { return theme.get(); },
+      set(patch) {
+        if (patch && patch.pos != null) pos.set(patch.pos);
+        if (patch && patch.theme != null) theme.set(patch.theme);
+        events.emit("panel:reapply", { pos: this.pos, theme: this.theme });
+      },
+    };
+
+    pos.subscribe((v) => events.emit("panel:reapply", { pos: v, theme: theme.get() }));
+    theme.subscribe((v) => events.emit("panel:reapply", { pos: pos.get(), theme: v }));
+
+    return {
+      name: "panelStyle",
+      init() { events.emit("panel:reapply", { pos: pos.get(), theme: theme.get() }); },
+    };
+  });
+
   LSB.register("ui", function ({ config, dom, events, user, signin }) {
     const log = LSB.logger.make("ui");
     const log_user = LSB.logger.make("ui/user");
