@@ -14,6 +14,15 @@ After install, Tampermonkey auto-updates the script from Greasy Fork using the s
 
 ## Features
 
+### 1.1.3 (2026-08-12)
+
+- `fix(user)`: capture rank + points from sidebar card; visitor avatar letter fallback.
+- `fix(notif)`: user-scoped endpoint factory for `/user/<id>?tab=notifications`; auto-bust stale cache from 1.1.2.
+- `feat(signin)`: auto-checkin via 5-minute poller with 20h dedupe window (persists across page loads).
+- `test(fixtures)`: programmatic builders (`build-fixture.mjs`) so future fixture updates are one `node scripts/gen-fixtures.mjs` away.
+- chore: drop legacy 
+otif-unread-count reliance; new layout uses item list length as the unread count.
+
 - **Always-visible status pill**: avatar + nickname + a colored dot that reflects the daily check-in state (green = signed in, yellow = not yet, gray = guest).
 - **One-click sign-in**: expand the pill and tap `立即签到` if you have not signed in today.
 - **Auto sign-in**: a switch in the expanded panel enables automatic check-in on every page load. Persisted in `GM_*`, no per-session confirmation.

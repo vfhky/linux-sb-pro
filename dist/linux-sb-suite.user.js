@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.1.2
+// @version      1.1.3
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @downloadURL https://update.greasyfork.org/scripts/590905.user.js
 // @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-12T02:00:30.948Z
+ * built: 2026-08-12T15:18:57.575Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -311,6 +311,11 @@ function createRegistry() {
 // Generate HTML fixtures for notif parser tests.  Variants cover the
 // site layouts we know about, plus a few edges (malformed, empty,
 // overflow).  Kept pure so it runs anywhere (node, browser, etc).
+
+// =====================================================================
+// Legacy notif layout (ul.notif-list with data-id / data-mention)
+// =====================================================================
+
 function renderItem({ id, mention, href, title, age }) {
   return (
     `<li data-id="${id}" data-mention="${mention ? "true" : "false"}">` +
@@ -342,19 +347,352 @@ const DEFAULT_ITEMS = [
   { id: 3, mention: true,  href: "/topic/102#reply-5", title: "@other 在【另一主题】提到了你", age: "1 小时前" },
 ];
 
+// =====================================================================
+// Current linux.sb (1.1.3 era) layouts
+// =====================================================================
+
+/**
+ * Home-page sidebar daily checkin card.
+ * @param {object} [opts]
+ * @param {"pending"|"done"} [opts.status="pending"]
+ * @param {string} [opts.csrf="test-csrf-token"]
+ * @param {{streak:number,total:number}} [opts.stats]
+ * @param {number} [opts.reward] points to display in the badge when pending
+ */
+function dailyCheckinCard({ status = "pending", csrf = "test-csrf-token", stats = { streak: 0, total: 0 }, reward = 75 } = {}) {
+  if (status === "done") {
+    return `<div class="card sidebar-card daily-checkin-card">` +
+      `<div class="daily-checkin-wrap">` +
+        `<div class="daily-checkin-head">` +
+          `<div>` +
+            `<div class="daily-checkin-title">每日签到</div>` +
+            `<div class="daily-checkin-sub">今天已签到</div>` +
+          `</div>` +
+          `<span class="daily-checkin-badge done">已签到</span>` +
+        `</div>` +
+        `<div class="daily-checkin-stats">` +
+          `<div><strong>${stats.streak}</strong><span>连续天数</span></div>` +
+          `<div><strong>${stats.total}</strong><span>累计签到</span></div>` +
+        `</div>` +
+        `<div class="daily-checkin-action">` +
+          `<div class="daily-checkin-done">已完成</div>` +
+        `</div>` +
+      `</div>` +
+      `</div>`;
+  }
+  return `<div class="card sidebar-card daily-checkin-card">` +
+    `<div class="daily-checkin-wrap">` +
+      `<div class="daily-checkin-head">` +
+        `<div>` +
+          `<div class="daily-checkin-title">每日签到</div>` +
+          `<div class="daily-checkin-sub">今天待签到</div>` +
+        `</div>` +
+        `<span class="daily-checkin-badge">+${reward} 积分</span>` +
+      `</div>` +
+      `<div class="daily-checkin-stats">` +
+        `<div><strong>${stats.streak}</strong><span>连续天数</span></div>` +
+        `<div><strong>${stats.total}</strong><span>累计签到</span></div>` +
+      `</div>` +
+      `<div class="daily-checkin-action">` +
+        `<form class="post-action-form" method="post" action="/daily_checkin">` +
+          `<input type="hidden" name="_csrf" value="${csrf}">` +
+          `<button type="submit" class="daily-checkin-btn">签到</button>` +
+        `</form>` +
+      `</div>` +
+    `</div>` +
+    `</div>`;
+}
+
+/**
+ * Dedicated /daily_checkin page (different layout from the sidebar card).
+ * Status text lives in `.admin-plugin-summary span`.
+ */
+function dailyCheckinPage({ status = "pending", csrf = "test-csrf-token", stats = { streak: 0, total: 0 } } = {}) {
+  const statusText = status === "done" ? "今天已签到" : "今天待签到";
+  const form = status === "done"
+    ? `<div class="daily-checkin-done">已完成</div>`
+    : `<form class="post-action-form" method="post" action="/daily_checkin">` +
+      `<input type="hidden" name="_csrf" value="${csrf}">` +
+      `<button type="submit" class="daily-checkin-btn">签到</button>` +
+      `</form>`;
+  return `<!doctype html><html><head><title>每日签到 - LINUX SB</title></head><body>` +
+    `<div class="admin-list-panel plugin-manage-panel daily-checkin-page-panel">` +
+      `<div class="admin-list-head">` +
+        `<div class="admin-head-inline">` +
+          `<div class="admin-head-left-slot">` +
+            `<div class="admin-plugin-summary"><strong>每日签到</strong><span>${statusText}</span></div>` +
+          `</div>` +
+        `</div>` +
+      `</div>` +
+      `<div class="plugin-panel-body daily-checkin-page-body">` +
+        `<div class="daily-checkin-stats daily-checkin-page-stats">` +
+          `<div><strong>${stats.streak}</strong><span>连续天数</span></div>` +
+          `<div><strong>${stats.total}</strong><span>累计签到</span></div>` +
+        `</div>` +
+        `<div class="daily-checkin-action daily-checkin-page-action">${form}</div>` +
+      `</div>` +
+    `</div>` +
+    `</body></html>`;
+}
+
+/**
+ * Right sidebar user card.
+ * @param {object} [opts]
+ * @param {boolean} [opts.loggedIn=true]
+ * @param {number} [opts.userId=16056]
+ * @param {string} [opts.nickname="myss"]
+ * @param {string} [opts.rank="笔友"]
+ * @param {number} [opts.points=177]
+ * @param {string} [opts.avatarUrl] explicit avatar src; defaults to dicebear
+ */
+function userCard({ loggedIn = true, userId = 16056, nickname = "myss", rank = "笔友", points = 177, avatarUrl = "https://linux.sb/app/avatars/bottts-neutral_24.svg" } = {}) {
+  if (loggedIn) {
+    return `<div class="card sidebar-card user-card">` +
+      `<div class="user-wrap">` +
+        `<div class="user-header">` +
+          `<div class="user-header-info">` +
+            `<a class="user-avatar-big" href="/user/${userId}">` +
+              `<img class="avatar-img" src="${avatarUrl}" alt="${nickname}" loading="lazy">` +
+            `</a>` +
+            `<div>` +
+              `<a class="user-name" href="/user/${userId}">${nickname}</a>` +
+              `<div class="user-rank">${rank} · 积分 ${points}</div>` +
+            `</div>` +
+          `</div>` +
+        `</div>` +
+        `<div class="user-links">` +
+          `<a href="/user/${userId}?tab=topics">我的主题</a>` +
+          `<a href="/user/${userId}?tab=replies">我的回帖</a>` +
+          `<a href="/user/${userId}?tab=points_rewards">我的积分</a>` +
+        `</div>` +
+      `</div>` +
+      `<a class="btn-post" href="/topic_edit">+ 发帖</a>` +
+      `</div>`;
+  }
+  // Visitor variant: same card shell, but avatar is a <div> letter placeholder
+  // and the name link points to /login.
+  const letter = (nickname || "G").slice(0, 1).toUpperCase();
+  return `<div class="card sidebar-card user-card">` +
+    `<div class="user-wrap">` +
+      `<div class="user-header">` +
+        `<div class="user-header-info">` +
+          `<div class="user-avatar-big visitor-avatar">${letter}</div>` +
+          `<div>` +
+            `<a class="user-name" href="/login">登录</a>` +
+          `</div>` +
+        `</div>` +
+      `</div>` +
+    `</div>` +
+    `</div>`;
+}
+
+/**
+ * One notification item in the current site structure
+ * (li.post-item.notification-item inside ul.post-list).
+ * @param {object} opts
+ * @param {"mention"|"reply"|"system"} [opts.kind="mention"]
+ * @param {string} opts.content - body HTML (can include <a> tags)
+ * @param {string} [opts.url]
+ * @param {string} [opts.actor="actor"]
+ * @param {string} [opts.age="刚刚"]
+ */
+function notificationItem({ kind = "mention", content = "", url = "/topic/100", actor = "actor", age = "刚刚" } = {}) {
+  const kindZh = ({ mention: "提及", reply: "回复", system: "系统" })[kind] || "系统";
+  return `<li class="post-item notification-item">` +
+    `<div class="post-avatar"><a class="avatar-profile-link" href="/user/${actor}"><img class="avatar-img" src="/app/avatars/bottts-neutral_0.svg" alt="${actor}"></a></div>` +
+    `<div class="post-body">` +
+      `<div class="post-title-row notification-head">` +
+        `<a class="post-title" href="/user/${actor}">${actor}</a>` +
+        `<span class="post-user-group notification-kind">${kindZh}</span>` +
+      `</div>` +
+      `<div class="post-meta"><span>${age}</span></div>` +
+      `<div class="post-content notification-content">${content}</div>` +
+    `</div>` +
+    `</li>`;
+}
+
+/**
+ * Full /user/<id>?tab=notifications page body (just the post-list block).
+ * @param {object} [opts]
+ * @param {Array} [opts.items]
+ */
+function notificationPage({ items = [] } = {}) {
+  return `<ul class="post-list">${items.map(notificationItem).join("")}</ul>`;
+}
+
+;
+// I/O layer for the daily checkin flow. Takes an http adapter so tests
+// can stub it. parseCheckinPage is the pure parser; this module wraps it
+// with the fetch + submit dance.
+
+function createCheckinIO({ http, base }) {
+  const URL = `${base}/daily_checkin`;
+
+  async function fetchStatus() {
+    const html = await http.getHtml(URL);
+    return { ...parseCheckinPage(html), source: "http-fetch" };
+  }
+
+  async function submit() {
+    const before = await fetchStatus();
+    if (before.status === "signed-in") {
+      return { ok: true, status: "signed-in", action: "none", source: "http-fetch" };
+    }
+    if (!before.csrf) {
+      return { ok: false, status: before.status, reason: "no-csrf-token", source: "http-fetch" };
+    }
+    const body = new URLSearchParams({ _csrf: before.csrf }).toString();
+    const res = await http.fetch(URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    const after = await fetchStatus();
+    return {
+      ok: res.ok || after.status === "signed-in",
+      status: after.status,
+      action: "signed-in",
+      source: "http-post",
+      httpStatus: res.status,
+    };
+  }
+
+  return { fetchStatus, submit, url: URL };
+}
+
+;
+// Parse a linux.sb daily checkin page (or sidebar card HTML) into a
+// structured { status, csrf, hasForm, stats } object.
+//
+// Two layouts are supported:
+//   1. Dedicated /daily_checkin page:
+//      <div class="admin-plugin-summary"><strong>每日签到</strong><span>今天待签到</span></div>
+//      <form class="post-action-form" action="/daily_checkin">
+//        <input name="_csrf" value="...">
+//        <button type="submit" class="daily-checkin-btn">签到</button>
+//      </form>
+//   2. Home sidebar card:
+//      <div class="card sidebar-card daily-checkin-card">
+//        <div class="daily-checkin-sub">今天待签到</div>
+//        <form class="post-action-form" action="/daily_checkin">...</form>
+//        (or, in done state, <div class="daily-checkin-done">已完成</div>)
+//      </div>
+//
+// In both cases the parser is structure-agnostic: it looks for status
+// text first, then csrf / form presence, then stats.
+
+const STATUS_ZH = {
+  "今天待签到": "not-signed-in",
+  "今天已签到": "signed-in",
+  "今日已签到": "signed-in",
+  "已连续签到": "signed-in",
+  "已签到": "signed-in",
+  "未签到": "not-signed-in",
+  "立即签到": "not-signed-in",
+  "签到": "not-signed-in",
+  "请先登录": "guest",
+};
+
+function detectStatus(text) {
+  if (!text) return "unknown";
+  for (const [zh, en] of Object.entries(STATUS_ZH)) {
+    if (text.includes(zh)) return en;
+  }
+  return "unknown";
+}
+
+function findText(html, patterns) {
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function parseCheckinPage(html) {
+  if (typeof html !== "string" || !html) {
+    return { status: "unknown", csrf: null, hasForm: false, stats: { streak: 0, total: 0 } };
+  }
+
+  // Status text sources, in priority order.
+  // 1) .admin-plugin-summary span (dedicated checkin page)
+  // 2) .daily-checkin-sub (sidebar card)
+  // 3) button text (legacy / fallback)
+  const statusText = findText(html, [
+    /<[^>]*class\s*=\s*["'][^"']*\badmin-plugin-summary\b[^"']*["'][\s\S]*?<span[^>]*>([\s\S]*?)<\//i,
+    /<[^>]*class\s*=\s*["'][^"']*\bdaily-checkin-sub\b[^"']*["'][^>]*>([\s\S]*?)<\//i,
+    /<button\b[^>]*>([\s\S]*?)<\/button>/i,
+  ]);
+
+  // CSRF token from the checkin form (must be inside a form with action /daily_checkin).
+  const csrfMatch = html.match(
+    /<form\b[^>]*action\s*=\s*["']\/daily_checkin["'][^>]*>[\s\S]*?<input\b[^>]*name\s*=\s*["']_csrf["'][^>]*value\s*=\s*["']([^"']+)["']/i
+  );
+
+  // Form presence.
+  const hasForm = /<form\b[^>]*action\s*=\s*["']\/daily_checkin["']/i.test(html);
+
+  // Stats: pair of <strong>N</strong><span>label</span>.
+  const stats = { streak: 0, total: 0 };
+  const statRe = /<strong>(\d+)<\/strong>\s*<span>([^<]+)<\/span>/gi;
+  let m;
+  while ((m = statRe.exec(html)) !== null) {
+    const n = Number(m[1]);
+    const label = m[2].trim();
+    if (/连续/.test(label)) stats.streak = n;
+    else if (/累计/.test(label)) stats.total = n;
+  }
+
+  return {
+    status: detectStatus(statusText || ""),
+    csrf: csrfMatch ? csrfMatch[1] : null,
+    hasForm,
+    stats,
+  };
+}
+
 ;
 // Parse a linux.sb notifications page into { unread, list }.
 // Pure: takes HTML text, returns a plain object.  MAX_LIST caps the
 // returned list size; unread is reported as the raw count even when
 // the list is capped (the panel can show "5 of N").
+//
+// Two layouts are supported; the parser auto-detects:
+//   1. Current site (1.1.3 era):
+//      <ul class="post-list">
+//        <li class="post-item notification-item">
+//          <span class="post-user-group notification-kind">提及</span>
+//          <div class="post-content notification-content">...</div>
+//        </li>
+//      </ul>
+//      The "unread" count is derived from the number of items (the
+//      real page does not expose a separate badge).
+//
+//   2. Legacy:
+//      <ul class="notif-list">
+//        <li data-id="N" data-mention="true|false"><a>...</a></li>
+//      </ul>
+//      with an optional <span class="notif-unread-count">N</span>.
+//      The "unread" count is read from the badge (falls back to list length).
+
 const MAX_LIST = 5;
 
-function extractUnread(html) {
+function stripTags(s) {
+  return String(s || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function kindFromZh(text) {
+  if (/提及|@|提到/.test(text)) return "mention";
+  if (/回复|reply/i.test(text)) return "reply";
+  return "system";
+}
+
+function extractUnreadLegacy(html) {
   const m = html.match(/class\s*=\s*["'][^"']*notif-unread-count["'][^>]*>\s*(\d+)/i);
   return m ? Number(m[1]) : 0;
 }
 
-function extractList(html) {
+function extractListLegacy(html) {
   const block = html.match(/<ul[^>]*class\s*=\s*["'][^"']*\bnotif-list\b[^"']*["'][\s\S]*?<\/ul>/i);
   if (!block) return [];
   const items = [];
@@ -368,16 +706,116 @@ function extractList(html) {
     const aMatch = body.match(/<a\b[^>]*href\s*=\s*["']([^"']+)[^>]*>([\s\S]*?)<\/a>/i);
     if (!aMatch) continue;
     const url = aMatch[1];
-    const title = aMatch[2].replace(/<[^>]+>/g, "").trim();
-    items.push({ id: idMatch ? idMatch[1] : url, url, title, isMention: mention });
+    const title = stripTags(aMatch[2]);
+    items.push({
+      id: idMatch ? idMatch[1] : url,
+      url,
+      title,
+      isMention: mention,
+      kind: mention ? "mention" : "system",
+    });
     if (items.length >= MAX_LIST) break;
   }
   return items;
 }
 
+function extractListNew(html) {
+  const items = [];
+  // Match each <li class="...notification-item...">...</li> block.
+  // Use a greedy-but-bounded approach: capture the <li> body via a
+  // manual scan so nested <div>/<span> blocks parse correctly.
+  const liRe = /<li\b[^>]*class\s*=\s*["'][^"']*\bnotification-item\b[^"']*["'][^>]*>/gi;
+  let openMatch;
+  while ((openMatch = liRe.exec(html)) !== null) {
+    const start = liRe.lastIndex;
+    // Walk forward, counting <div ...> opens minus </div> closes, until
+    // we hit the matching </li>. Handles nested divs/p/spans correctly.
+    const close = findMatchingClose(html, start, "li");
+    if (close < 0) break;
+    const body = html.slice(start, close);
+    // Kind text lives inside the first .notification-kind element.
+    const kindMatch = matchInner(body, "notification-kind", "span");
+    const contentMatch = matchInner(body, "notification-content", "div");
+    const linkMatch = body.match(/<a\b[^>]*href\s*=\s*["']([^"']+)/i);
+    if (!contentMatch) {
+      liRe.lastIndex = close + 5;
+      continue;
+    }
+    const kindZh = kindMatch ? stripTags(kindMatch) : "";
+    const title = stripTags(contentMatch).slice(0, 240);
+    items.push({
+      id: linkMatch ? linkMatch[1] : title,
+      url: linkMatch ? linkMatch[1] : null,
+      title,
+      kind: kindFromZh(kindZh),
+    });
+    liRe.lastIndex = close + 5;
+    if (items.length >= MAX_LIST) break;
+  }
+  return items;
+}
+
+// Find the index of the matching </TAG> for an opening <TAG at position
+// `start` (just past the opening tag).  Walks the substring, counting
+// opens and closes, allowing for nested same-tag elements.  Returns -1
+// if no match (malformed input).
+function findMatchingClose(html, start, tag) {
+  const openRe = new RegExp(`<${tag}\\b[^>]*>`, "gi");
+  const closeRe = new RegExp(`</${tag}\\s*>`, "gi");
+  let depth = 1;
+  let i = start;
+  // Build candidate positions by scanning both regexes.
+  openRe.lastIndex = i;
+  closeRe.lastIndex = i;
+  let nextOpen = openRe.exec(html);
+  let nextClose = closeRe.exec(html);
+  while (depth > 0) {
+    if (nextClose && (!nextOpen || nextClose.index < nextOpen.index)) {
+      depth--;
+      if (depth === 0) return nextClose.index;
+      nextClose = closeRe.exec(html);
+    } else if (nextOpen) {
+      depth++;
+      nextOpen = openRe.exec(html);
+    } else if (nextClose) {
+      depth--;
+      if (depth === 0) return nextClose.index;
+      nextClose = closeRe.exec(html);
+    } else {
+      return -1;
+    }
+  }
+  return -1;
+}
+
+// Find the inner text of the first <TAG class="...className...">...</TAG>
+// block within `html`.  Returns null if not found.
+function matchInner(html, className, tag) {
+  const re = new RegExp(
+    `<${tag}\\b[^>]*class\\s*=\\s*["'][^"']*\\b${className}\\b[^"']*["'][^>]*>`,
+    "i"
+  );
+  const m = html.match(re);
+  if (!m) return null;
+  const start = m.index + m[0].length;
+  const close = findMatchingClose(html, start, tag);
+  if (close < 0) return null;
+  return html.slice(start, close);
+}
+
 function parseNotifications(html) {
   if (typeof html !== "string" || !html) return { unread: 0, list: [] };
-  return { unread: extractUnread(html), list: extractList(html) };
+
+  // New structure takes priority: it ships with the live site and the
+  // "notification-item" class is unique to it.
+  if (/notification-item/.test(html)) {
+    const list = extractListNew(html);
+    return { unread: list.length, list };
+  }
+
+  // Legacy fallback.
+  const list = extractListLegacy(html);
+  return { unread: extractUnreadLegacy(html), list };
 }
 
 ;
@@ -432,7 +870,7 @@ function makeStore(gm, prefix) {
   };
 }
 ;if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.1.2" });
+  const LSB = (root.LSB = { __booted: true, version: "1.1.3" });
 
   // =====================================================================
   // core/config
@@ -476,6 +914,12 @@ function makeStore(gm, prefix) {
       // Endpoint candidates; first one that returns a notif-shaped page wins.
       // Add or remove paths here when the site changes.
       candidates: ["/notifications", "/notice", "/user/notifications"],
+      // Build a user-scoped endpoint when the site requires it
+      // (e.g. /user/<id>?tab=notifications). Return null to fall through to candidates.
+      endpoint(userId) {
+        if (userId) return `/user/${userId}?tab=notifications`;
+        return null;
+      },
       // Polling config (passed to core/poller.mjs).
       intervalMs: 60_000,
       backoffAfter: 3,
@@ -736,13 +1180,20 @@ function makeStore(gm, prefix) {
       signinCard:     ".signin-card, .daily-signin, [class*=\"signin\"], [class*=\"checkin\"]",
       signinButton:   "button[class*=\"signin\"], button[class*=\"checkin\"], a[class*=\"signin\"]",
       // Right sidebar user card (logged-in home page)
-      userCard:       ".sidebar-card.user-card",
-      userNameLink:   ".sidebar-card.user-card .user-name",
-      userAvatar:     ".sidebar-card.user-card .user-avatar-big img.avatar-img",
-      userRank:       ".sidebar-card.user-card .user-rank",
+      // Class is "card sidebar-card user-card" on the live site.
+      userCard:        ".sidebar-card.user-card",
+      userNameLink:    ".sidebar-card.user-card .user-name",
+      // Avatar wrapper (logged-in) + inner <img> (real photo) + visitor letter.
+      userAvatar:      ".sidebar-card.user-card .user-avatar-big",
+      userAvatarImg:   ".sidebar-card.user-card .user-avatar-big img.avatar-img",
+      userCardVisitor: ".sidebar-card.user-card .user-avatar-big.visitor-avatar",
+      // Rank text reads "笔友 · 积分 256"; we extract the digit run for points.
+      userRank:        ".sidebar-card.user-card .user-rank",
+      userPoints:      ".sidebar-card.user-card .user-points",
       // Home page sidebar daily checkin card
-      dailyCheckinCard:  ".sidebar-card.daily-checkin",
+      dailyCheckinCard:   ".sidebar-card.daily-checkin-card",
       dailyCheckinStatus: ".daily-checkin-sub",
+      dailyCheckinBadge:  ".daily-checkin-badge",
       // Checkin page form
       checkinForm:      'form.post-action-form[action="/daily_checkin"]',
       checkinBtn:       'form.post-action-form[action="/daily_checkin"] button[type=submit]',
@@ -850,19 +1301,38 @@ function makeStore(gm, prefix) {
         // Pull nickname / avatar / rank from the right sidebar card.
         const card = dom.$(LSB.api.linuxSb.selectors.userCard);
         const nameEl = card ? dom.$(LSB.api.linuxSb.selectors.userNameLink, card) : null;
-        const avatarEl = card ? dom.$(LSB.api.linuxSb.selectors.userAvatar, card) : null;
-        const rankEl = card ? dom.$(LSB.api.linuxSb.selectors.userRank, card) : null;
-        const nickname = nameEl ? dom.text(nameEl) : null;
-        const avatarUrl = avatarEl ? dom.src(avatarEl) : null;
+        const avatarWrap = card ? dom.$(LSB.api.linuxSb.selectors.userAvatar, card) : null;
+        const avatarImg  = avatarWrap ? dom.$("img.avatar-img", avatarWrap) : null;
+        const rankEl     = card ? dom.$(LSB.api.linuxSb.selectors.userRank, card) : null;
+        const pointsEl   = card ? dom.$(LSB.api.linuxSb.selectors.userPoints, card) : null;
+        const nickname   = nameEl ? dom.text(nameEl) : null;
+        let avatarUrl    = avatarImg ? dom.src(avatarImg) : null;
+        let avatarIsDicebear = !!avatarUrl && /\/avatars\/|dicebear/i.test(avatarUrl);
+        if (!avatarUrl && avatarWrap && avatarWrap.classList.contains("visitor-avatar")) {
+          // Visitor variant: synthesise a stable placeholder from the id.
+          avatarUrl = LSB.api.linuxSb.avatarUrl.dicebearForUserId(id || "guest");
+          avatarIsDicebear = true;
+        }
+        // Rank text is "笔友 · 积分 256"; points may not have a dedicated element.
+        const rankText = rankEl ? dom.text(rankEl) : null;
+        let points = null;
+        if (pointsEl) {
+          const m = dom.text(pointsEl).match(/(\d+)/);
+          if (m) points = Number(m[1]);
+        } else if (rankText) {
+          const m = rankText.match(/(\d+)/);
+          if (m) points = Number(m[1]);
+        }
         return {
           id: id || null,
           nickname: nickname || null,
           avatarUrl: avatarUrl || null,
-          avatarIsDicebear: !!avatarUrl && /dicebear|\/avatars\//i.test(avatarUrl),
+          avatarIsDicebear,
           profileUrl: href ? dom.absUrl(href) : null,
-          rank: rankEl ? dom.text(rankEl) : null,
+          rank: rankText || null,
+          points,
           isLoggedIn: true,
-          source: "user-card",
+          source: avatarImg ? "user-card" : "user-card-visitor",
         };
       }
       // 2. any avatar-profile-link on page (post author etc.)
@@ -959,7 +1429,7 @@ function makeStore(gm, prefix) {
       if (!info) return null;
       return LSB.utils.pick(info, [
         "id", "nickname", "avatarUrl", "avatarIsDicebear",
-        "profileUrl", "isLoggedIn", "source", "rank",
+        "profileUrl", "isLoggedIn", "source", "rank", "points",
       ]);
     }
 
@@ -1120,17 +1590,68 @@ function makeStore(gm, prefix) {
       events.emit("signin:auto-changed", !!on);
     }
 
-    // Auto signin: run on user:changed whenever the toggle is on. No _autoRan
-    // guard so each page refresh can re-check (user wants this).
-    events.on("user:changed", async (u) => {
-      if (!u || !u.isLoggedIn) return;
-      if (!getAutoSignin()) return;
-      try {
-        const r = await ensureSignedIn();
-        log.info("auto signin result", r);
-        events.emit("signin:auto", r);
-      } catch (err) { log.warn("auto signin failed", err); }
+    // Auto signin: drive a 5-minute poller; 20h dedupe window so we do not
+    // re-signin within the same day. The poller stops when the user logs
+    // out or disables the toggle.
+    const _state = { lastSignedInAt: 0, pollInFlight: false };
+    let _signinPoller = null;
+
+    function _ensurePoller() {
+      if (_signinPoller) return _signinPoller;
+      if (typeof makePoller !== "function") {
+        log.warn("makePoller not inlined; auto-checkin disabled");
+        return null;
+      }
+      return makePoller({
+        name: "signin-auto",
+        onTick: async () => {
+          if (_state.pollInFlight) return;
+          if (!getAutoSignin()) return;
+          if (!user || !user.info || !user.info.id) return;
+          // Skip if we already signed in within the last 20h.
+          if (_state.lastSignedInAt && (Date.now() - _state.lastSignedInAt) < 20 * 3600 * 1000) return;
+          _state.pollInFlight = true;
+          try {
+            const r = await ensureSignedIn();
+            if (r && r.status === "signed-in") _state.lastSignedInAt = Date.now();
+            events.emit("signin:auto", r);
+          } catch (err) { log.warn("auto tick failed", err); }
+          finally { _state.pollInFlight = false; }
+        },
+        intervalMs: 5 * 60_000,
+        backoffAfter: 2,
+        backoffMs: 30 * 60_000,
+      });
+    }
+
+    function _startAuto() {
+      const p = _ensurePoller();
+      if (p) p.start();
+    }
+    function _stopAuto() {
+      if (_signinPoller) { _signinPoller.stop(); _signinPoller = null; }
+    }
+
+    events.on("user:changed", (u) => {
+      if (u && u.isLoggedIn && getAutoSignin()) _startAuto();
+      else _stopAuto();
     });
+    events.on("signin:auto-changed", (on) => {
+      if (on && user && user.info && user.info.id) _startAuto();
+      else _stopAuto();
+      if (on && _signinPoller) _signinPoller.tick().catch(() => {});
+    });
+    function _persistLastSignedIn() {
+      if (_state.lastSignedInAt > 0) {
+        try { LSB.storage.set("signin.lastSignedInAt", _state.lastSignedInAt, 0); } catch (e) {}
+      }
+    }
+    events.on("signin:auto", _persistLastSignedIn);
+    // Restore dedupe window across page loads.
+    try {
+      const v = LSB.storage.get("signin.lastSignedInAt");
+      if (typeof v === "number" && v > 0) _state.lastSignedInAt = v;
+    } catch (e) {}
 
     return {
       name: "signin",
@@ -1179,6 +1700,10 @@ function makeStore(gm, prefix) {
       return { name: "notif", init() {} };
     }
 
+    // One-shot cache bust: 1.1.2 cached a wrong endpoint path; 1.1.3 uses
+    // the user-scoped factory. Clear the old value so we re-discover.
+    if (typeof GM_deleteValue === "function") GM_deleteValue("lsb:notif:endpoint");
+
     const state = { unread: 0, list: [], endpoint: null, lastFetchAt: 0, lastError: null };
     LSB.notif = { state, start, stop, refresh };
 
@@ -1189,8 +1714,19 @@ function makeStore(gm, prefix) {
 
     async function discoverEndpoint() {
       if (state.endpoint) return state.endpoint;
+      // 1) Per-user factory endpoint (preferred when user is known).
+      const uid = (user && user.info && user.info.id) || null;
+      const factoryEndpoint = (typeof config.notif.endpoint === "function")
+        ? config.notif.endpoint(uid) : null;
+      if (factoryEndpoint) {
+        state.endpoint = config.site.apiBase + factoryEndpoint;
+        if (typeof GM_setValue === "function") GM_setValue("lsb:notif:endpoint", state.endpoint);
+        return state.endpoint;
+      }
+      // 2) Cached static endpoint.
       const cached = (typeof GM_getValue === "function") ? GM_getValue("lsb:notif:endpoint", null) : null;
       if (cached) { state.endpoint = cached; return cached; }
+      // 3) Probe static candidates.
       const endpoint = await probeEndpoint(http, config.site.apiBase, config.notif.candidates);
       if (endpoint) {
         state.endpoint = endpoint;
