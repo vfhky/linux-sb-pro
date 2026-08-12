@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { bundle, listLibFiles } from "../core/inliner.mjs";
+import { bundle, listLibFiles } from "../build/inliner.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 

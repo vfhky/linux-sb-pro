@@ -9,7 +9,7 @@
 //
 // Pipeline:
 //   1. Read linux-sb-suite.user.js (dev source with localhost @updateURL).
-//   2. Inline core/*.mjs and lib/*.mjs via core/inliner.mjs, before the
+//   2. Inline core/*.mjs and lib/*.mjs via build/inliner.mjs, before the
 //      IIFE body so the inlined symbols are in scope.
 //   3. Strip dev-only metadata, inject public metadata, stamp a build
 //      timestamp, write to dist/linux-sb-suite.user.js.
@@ -17,7 +17,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { bundle, listLibFiles } from "./core/inliner.mjs";
+import { bundle, listLibFiles } from "./build/inliner.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(__dirname, "linux-sb-suite.user.js");

@@ -39,3 +39,11 @@ Thumbs.db
 
 # additional disposable probe profiles (was .tmp-probe/ already, this catches the suffixed variants)
 .tmp-probe*/
+
+
+# ephemeral CDP probe scripts (Greasy Fork sync, login probes)
+_probe*.mjs
+_fill.mjs
+_submit.mjs
+_resync.mjs
+_probe_login.mjs
