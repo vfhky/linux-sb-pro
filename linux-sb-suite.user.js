@@ -784,17 +784,68 @@
       events.emit("signin:auto-changed", !!on);
     }
 
-    // Auto signin: run on user:changed whenever the toggle is on. No _autoRan
-    // guard so each page refresh can re-check (user wants this).
-    events.on("user:changed", async (u) => {
-      if (!u || !u.isLoggedIn) return;
-      if (!getAutoSignin()) return;
-      try {
-        const r = await ensureSignedIn();
-        log.info("auto signin result", r);
-        events.emit("signin:auto", r);
-      } catch (err) { log.warn("auto signin failed", err); }
+    // Auto signin: drive a 5-minute poller; 20h dedupe window so we do not
+    // re-signin within the same day. The poller stops when the user logs
+    // out or disables the toggle.
+    const _state = { lastSignedInAt: 0, pollInFlight: false };
+    let _signinPoller = null;
+
+    function _ensurePoller() {
+      if (_signinPoller) return _signinPoller;
+      if (typeof makePoller !== "function") {
+        log.warn("makePoller not inlined; auto-checkin disabled");
+        return null;
+      }
+      return makePoller({
+        name: "signin-auto",
+        onTick: async () => {
+          if (_state.pollInFlight) return;
+          if (!getAutoSignin()) return;
+          if (!user || !user.info || !user.info.id) return;
+          // Skip if we already signed in within the last 20h.
+          if (_state.lastSignedInAt && (Date.now() - _state.lastSignedInAt) < 20 * 3600 * 1000) return;
+          _state.pollInFlight = true;
+          try {
+            const r = await ensureSignedIn();
+            if (r && r.status === "signed-in") _state.lastSignedInAt = Date.now();
+            events.emit("signin:auto", r);
+          } catch (err) { log.warn("auto tick failed", err); }
+          finally { _state.pollInFlight = false; }
+        },
+        intervalMs: 5 * 60_000,
+        backoffAfter: 2,
+        backoffMs: 30 * 60_000,
+      });
+    }
+
+    function _startAuto() {
+      const p = _ensurePoller();
+      if (p) p.start();
+    }
+    function _stopAuto() {
+      if (_signinPoller) { _signinPoller.stop(); _signinPoller = null; }
+    }
+
+    events.on("user:changed", (u) => {
+      if (u && u.isLoggedIn && getAutoSignin()) _startAuto();
+      else _stopAuto();
     });
+    events.on("signin:auto-changed", (on) => {
+      if (on && user && user.info && user.info.id) _startAuto();
+      else _stopAuto();
+      if (on && _signinPoller) _signinPoller.tick().catch(() => {});
+    });
+    function _persistLastSignedIn() {
+      if (_state.lastSignedInAt > 0) {
+        try { LSB.storage.set("signin.lastSignedInAt", _state.lastSignedInAt, 0); } catch (e) {}
+      }
+    }
+    events.on("signin:auto", _persistLastSignedIn);
+    // Restore dedupe window across page loads.
+    try {
+      const v = LSB.storage.get("signin.lastSignedInAt");
+      if (typeof v === "number" && v > 0) _state.lastSignedInAt = v;
+    } catch (e) {}
 
     return {
       name: "signin",
