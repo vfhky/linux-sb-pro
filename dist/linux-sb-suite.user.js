@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-12T01:22:25.214Z
+ * built: 2026-08-12T01:22:45.081Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -1191,6 +1191,85 @@ function makeStore(gm, prefix) {
       name: "panelStyle",
       init() { events.emit("panel:reapply", { pos: pos.get(), theme: theme.get() }); },
     };
+  });
+
+  LSB.register("notif", function ({ config, http, events, user }) {
+    const log = LSB.logger.make("notif");
+    if (typeof makePoller !== "function" || typeof probeEndpoint !== "function" || typeof parseNotifications !== "function") {
+      log.warn("lib not inlined; notif disabled");
+      return { name: "notif", init() {} };
+    }
+
+    const state = { unread: 0, list: [], endpoint: null, lastFetchAt: 0, lastError: null };
+    LSB.notif = { state, start, stop, refresh };
+
+    let poller = null;
+    let userBound = false;
+
+    function isLoggedIn() { return !!(user && user.info && user.info.id); }
+
+    async function discoverEndpoint() {
+      if (state.endpoint) return state.endpoint;
+      const cached = (typeof GM_getValue === "function") ? GM_getValue("lsb:notif:endpoint", null) : null;
+      if (cached) { state.endpoint = cached; return cached; }
+      const endpoint = await probeEndpoint(http, config.site.apiBase, config.notif.candidates);
+      if (endpoint) {
+        state.endpoint = endpoint;
+        if (typeof GM_setValue === "function") GM_setValue("lsb:notif:endpoint", endpoint);
+      }
+      return endpoint;
+    }
+
+    async function refresh() {
+      const endpoint = await discoverEndpoint();
+      if (!endpoint) return;
+      const html = await http.getHtml(endpoint);
+      const { unread, list } = parseNotifications(html);
+      state.unread = unread;
+      state.list = list;
+      state.lastFetchAt = Date.now();
+      state.lastError = null;
+      events.emit("notif:updated", { unread, list });
+      log.debug("refreshed", unread, list.length);
+    }
+
+    function bindUser() {
+      if (userBound) return;
+      userBound = true;
+      events.on("user:changed", () => { if (isLoggedIn()) start(); else stop(); });
+      if (isLoggedIn()) start();
+    }
+
+    function start() {
+      if (poller) return;
+      poller = makePoller({ name: "notif", onTick: refresh, intervalMs: config.notif.intervalMs, backoffAfter: config.notif.backoffAfter, backoffMs: config.notif.backoffMs });
+      poller.start();
+      log.info("started");
+    }
+    function stop() {
+      if (!poller) return;
+      poller.stop();
+      poller = null;
+      state.unread = 0; state.list = []; state.lastError = null;
+      events.emit("notif:updated", { unread: 0, list: [] });
+      log.info("stopped");
+    }
+
+    if (LSB.sections) {
+      LSB.sections.register("notif", {
+        order: 0,
+        hidden: () => !isLoggedIn(),
+        render: () => ({
+          innerHTML:
+            `<div class="lsb-section lsb-notif" data-lsb="notif-section">` +
+            `<div class="lsb-section-title">${LSB.i18n.t("notif.title")} (<span data-lsb="notif-count">0</span>)</div>` +
+            `<ul class="lsb-notif-list" data-lsb="notif-list"></ul>` +
+            `</div>`,
+        }),
+      });
+    }
+
+    return { name: "notif", init: bindUser };
   });
 
   LSB.register("ui", function ({ config, dom, events, user, signin }) {
