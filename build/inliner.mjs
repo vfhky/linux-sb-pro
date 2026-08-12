@@ -13,7 +13,7 @@ export function listLibFiles(libDir) {
 export function bundle(files) {
   return files
     .map((f) => readFileSync(f, "utf8"))
-    .map((src) => src.replace(/^export\s+/gm, ""))
+    .map((src) => src.replace(/^export\s+/gm, "").replace(/^import\s+[^;]+;?\s*$/gm, ""))
     .join("\n;\n")
     .trim();
 }
