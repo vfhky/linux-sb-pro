@@ -350,6 +350,13 @@
     });
   }
 
+  // =====================================================================
+  // Toast notification manager (infrastructure, not a module)
+  // =====================================================================
+  LSB.toast = (typeof createToastManager === 'function')
+    ? createToastManager({ maxVisible: 3, gap: 8, durationMs: 3000, containerId: 'lsb-toast-container' })
+    : { show: function() {}, dismiss: function() {}, destroy: function() {} };
+
     LSB.api = LSB.api || {};
   LSB.api.linuxSb = {
     isHome(href) {
@@ -1103,6 +1110,17 @@
       #lsb-panel .lsb-footer a:hover { color: #e5e7eb; text-decoration: underline; }
     `);
 
+    // Toast CSS (injected once, follows panel theme via CSS variables)
+    GM_addStyle('\x23lsb-toast-container{position:fixed;bottom:12px;right:12px;z-index:2147483647;display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}' +
+      '.lsb-toast{pointer-events:auto;max-width:300px;padding:10px 14px;border-radius:8px;font:13px/1.4 system-ui,sans-serif;color:var(--lsb-fg,#eee);background:var(--lsb-bg,rgba(20,22,28,0.94));border:1px solid var(--lsb-border,rgba(255,255,255,0.08));box-shadow:var(--lsb-shadow,0 8px 24px rgba(0,0,0,0.35));backdrop-filter:blur(8px);display:flex;align-items:center;gap:8px;animation:lsb-toast-in .25s ease-out;transition:opacity .2s,transform .2s}' +
+      '.lsb-toast.lsb-toast-out{opacity:0;transform:translateX(20px)}' +
+      '@keyframes lsb-toast-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}' +
+      '.lsb-toast[data-type=success]{border-left:3px solid \x234ade80}' +
+      '.lsb-toast[data-type=error]{border-left:3px solid \x23f87171}' +
+      '.lsb-toast[data-type=info]{border-left:3px solid \x2360a5fa}' +
+      '.lsb-toast-icon{flex:none;font-size:14px}' +
+      '.lsb-toast-msg{flex:1;min-width:0}');
+
     // -----------------------------------------------------------------
     // Build the panel.  Sections are rendered later from the registry.
     // -----------------------------------------------------------------
@@ -1187,6 +1205,11 @@
           root.style.setProperty("--lsb-fg", p.fg);
           root.style.setProperty("--lsb-border", p.border);
           root.style.setProperty("--lsb-shadow", p.shadow);
+          // Also set on documentElement so toast (outside #lsb-panel) inherits theme.
+          document.documentElement.style.setProperty("--lsb-bg", p.bg);
+          document.documentElement.style.setProperty("--lsb-fg", p.fg);
+          document.documentElement.style.setProperty("--lsb-border", p.border);
+          document.documentElement.style.setProperty("--lsb-shadow", p.shadow);
         } catch (e) { /* unknown theme */ }
       }
     }
