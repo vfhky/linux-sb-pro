@@ -797,7 +797,7 @@
         _startAuto();
         // Immediate check on page load (poller also does periodic ticks).
         ensureSignedIn().then(function (r) {
-          if (r && r.ok) _showSigninToast(r);
+          if (r && r.ok && r.action === "signed-in") _showSigninToast(r);
         }).catch(function (e) { log.warn("init checkin failed", e); });
       } else {
         _stopAuto();
