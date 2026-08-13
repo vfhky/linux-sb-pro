@@ -812,9 +812,9 @@
     // Toast helper — safe even if LSB.toast is not yet initialized.
     function _showSigninToast(result) {
       if (!LSB.toast || typeof LSB.toast.show !== "function") return;
-      if (result && result.ok && result.status === "signed-in") {
-        var points = (result.stats && result.stats.total) ? " +" + result.stats.total + " 积分" : "";
-        LSB.toast.show("签到成功 ✓" + points, { type: "success" });
+      if (result && result.ok && result.action === "signed-in") {
+        var days = (result.stats && result.stats.total) ? "，累计签到 " + result.stats.total + " 天" : "";
+        LSB.toast.show("签到成功 ✓" + days, { type: "success" });
       } else if (result && !result.ok && result.reason) {
         if (result.reason !== "not-logged-in" && result.reason !== "unknown") {
           LSB.toast.show("签到失败，请重试", { type: "error", durationMs: 5000 });
@@ -1358,8 +1358,8 @@
           setTimeout(() => refresh().catch(() => {}), 600);
           // Toast on manual signin success
           if (LSB.toast && typeof LSB.toast.show === "function") {
-            var points = (r.stats && r.stats.total) ? " +" + r.stats.total + " 积分" : "";
-            LSB.toast.show("签到成功 ✓" + points, { type: "success" });
+            var days = (r.stats && r.stats.total) ? "，累计签到 " + r.stats.total + " 天" : "";
+            LSB.toast.show("签到成功 ✓" + days, { type: "success" });
           }
         }
       } catch (err) {
