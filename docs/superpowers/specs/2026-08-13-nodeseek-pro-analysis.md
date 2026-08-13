@@ -1,216 +1,215 @@
-# Nodeseek Pro 调研报告
+# Nodeseek Pro 调研报告（基于真实源码验证）
 
 - **脚本**: `Nodeseek Pro` (Greasy Fork #567109)
-- **版本**: 1.0.8 (调研时)
-- **源码规模**: 290,303 字节（约 4700 行）
-- **目标站点**: `nodeseek.com`, `deepflood.com`
-- **原始仓库**: 由 `caigg188` 等人维护（Vite + 模块化打包）
+- **版本**: 1.0.8
+- **源码规模**: 290,303 字节（约 4741 行）
+- **目标站点**: `nodeseek.com`, `deepflood.com`（通过 `SITES` 数组配置双站点）
+- **依赖**: 外部加载 `layui` 2.10.3（用于 toast/弹窗/设置面板），`highlight.js` 11.9.0
+- **代码风格**: Vite 打包产物，每个 feature 为独立模块，有 `__vite_glob_*` 标记
 
-## 1. 功能清单（22 个内置 feature）
+## 1. 完整功能清单（26 个 feature，按源码顺序）
 
-| ID                | 类别        | 功能 |
-|-------------------|------------|------|
-| `autoJump`        | 基础        | 外部链接重定向（`/link?url=...`）直接跳过 |
-| `autoLoading`     | 基础        | 列表页无限滚动加载，按等级屏蔽 |
-| `signIn`          | 基础        | 每日自动签到（`/api/attendance?random=`），日期级去重 |
-| `signinTips`      | 基础        | 自动签到关闭时，在页面顶部插入醒目的黄底签到提示条 |
-| `callout`         | 排版        | `> [!info]` / `> [!warning]` 等 Callout 块渲染 |
-| `codeHighlight`   | 排版        | 集成 `highlight.js` |
-| `commentShortcut` | 交互        | 评论区快捷键（J/K 上下、Shift+R 回复、/ 搜索） |
-| `darkMode`        | 主题        | 跟随系统的暗色模式切换 |
-| `history`         | 工具        | 本地浏览历史记录（localStorage）+ 抽屉面板 |
-| `imageSlide`      | 排版        | 帖子内图片幻灯片浏览 |
-| `instantPage`     | 性能        | 鼠标悬停预取下一页（prefetch） |
-| `levelTag`        | 排版        | 用户等级标签（VIP / 高级 / 普通） |
-| `menus`           | 工具        | TM 菜单命令（`GM_registerMenuCommand`） |
-| `quickComment`    | 交互        | 自定义快捷回复模板（多组） |
-| `aiComment`       | 实验        | AI 自动回帖（需自备 Key） |
-| `smoothScroll`    | 体验        | 平滑滚动 |
-| `userCardExt`     | 社交        | 鼠标悬停显示用户卡片浮层 |
-| `inlineUserInfo`  | 社交        | 帖子作者区展示更多信息（关注数、注册时长） |
-| `userRelation`    | 社交        | 关注/拉黑按钮 + 本地好友高亮 + 关键词黑名单 |
-| `visitedColor`    | 体验        | 已访问链接染色 |
-| `timeChinese`     | 排版        | 时间戳中文友好显示（刚刚 / X 分钟前） |
-| `emailNavLink`    | 工具        | 邮箱域名快捷跳转 |
+| ID | 类别 | 功能 | 关键实现 |
+|----|------|------|---------|
+| `autoJump` | 基础 | 外部链接重定向跳过（`/link?url=...`） | `location.href = url` 直接跳转 |
+| `autoLoading` | 基础 | 列表页无限滚动加载 | `IntersectionObserver` + 分页参数 |
+| `blockPosts` | 过滤 | 按关键词/用户屏蔽帖子 | `store.get("block_list")` 关键词匹配 |
+| `blockViewLevel` | 过滤 | 按等级屏蔽帖子 | `store.get("block_view_level")` 阈值过滤 |
+| `callout` | 排版 | `> [!info]` 等 Callout 块渲染 | 正则替换 + CSS 类映射 |
+| `codeHighlight` | 排版 | 代码高亮 | 动态加载 `highlight.js` + 亮/暗主题切换 |
+| `commentShortcut` | 交互 | 评论区快捷键 | J/K 导航、Shift+R 回复、/ 搜索 |
+| `darkMode` | 主题 | 跟随系统暗色模式 | `prefers-color-scheme` + CSS 变量 |
+| `history` | 工具 | 本地浏览历史记录 | `localStorage` + 抽屉面板渲染 |
+| `imageSlide` | 排版 | 帖子内图片幻灯片浏览 | 点击放大 + 左右切换 |
+| `instantPage` | 性能 | 鼠标悬停预取下一页 | `mouseover` 延迟 200ms → `fetch()` |
+| `levelTag` | 排版 | 用户等级标签 | CSS 注入 + 等级名映射 |
+| `menus` | 工具 | TM 菜单命令注册 | `GM_registerMenuCommand` + `GM_unregisterMenuCommand` |
+| `quickComment` | 交互 | 自定义快捷回复模板 | 多组模板 + 下拉选择 + 填入 textarea |
+| `aiComment` | 实验 | AI 自动回帖 | 需自备 Key，总开关 `AI = false` |
+| `signIn` | 基础 | 每日自动签到 | `POST /api/attendance?random=N`，日期级去重 |
+| `signinTips` | 基础 | 自动签到关闭时的顶部提醒条 | 黄底闪烁 banner + "今天不提示" |
+| `smoothScroll` | 体验 | 平滑滚动 | 一行 CSS: `html{scroll-behavior:smooth}` |
+| `userCardExt` | 社交 | 鼠标悬停用户卡片 | hover 延迟 300ms → Ajax 获取用户详情 |
+| `visitedColor` | 体验 | 已访问链接染色 | CSS `:visited` 伪类 |
+| `emailNavLink` | 工具 | 邮箱域名快捷跳转 | 正则匹配邮箱 → 链接化 |
+| `timeChinese` | 排版 | 时间戳中文友好显示 | "刚刚/X分钟前/X小时前" |
+| `imageUpload` | 工具 | 图片上传增强 | 粘贴/拖拽上传 + 进度条 |
+| `openInNewTabFix` | 基础 | 修复外链在新标签页打开 | `target="_blank"` 注入 |
+| `inlineUserInfo` | 社交 | 帖子作者区补全信息 | DOM 注入注册时间/积分 |
+| `userRelation` | 社交 | 关注/拉黑 + 本地好友高亮 + 关键词黑名单 | `store` 持久化列表 + DOM 标记 |
 
-## 2. 架构亮点
+## 2. 架构（已验证）
 
-### 2.1 特性即模块（feature-as-module）
+### 2.1 特性即模块（define 模式）
 
-每个特性是一个纯数据对象，通过 `define(cfg)` 注册：
-
-```js
+```javascript
+// 真实源码签名（行 2865-2901）
 const signIn = {
-  id: "signIn",
-  deps: ["ui"],
-  order: 80,                  // 启动顺序
-  cfg: { sign_in: { enabled: true, method: 1, last_date: "" } },
-  meta: { sign_in: { label: "自动签到", group: "🚀 基础功能",
-                     fields: { method: { type: "RADIO", options: [...] } } } },
-  match: ctx => ctx.site && ctx.loggedIn && ...,
-  init: async (ctx) => { ... }
+    id: "signIn",
+    deps: ["ui"],           // 依赖声明（仅 "ui"）
+    order: 80,              // 启动顺序
+    cfg: {                  // 默认配置（路径式）
+        sign_in: {
+            ns: { enabled: true, method: 1, last_date: "", ignore_date: "" },
+            df: { enabled: true, method: 1, last_date: "", ignore_date: "" }
+        }
+    },
+    meta: {                 // 设置面板 UI 描述
+        sign_in: {
+            label: "自动签到", group: "🚀 基础功能",
+            fields: { method: { type: "RADIO", label: "签到方式", valueType: "number",
+                      options: [{ value: 1, text: "随机🍗" }, { value: 2, text: "5个🍗" }] } },
+            hidden: ["last_date", "ignore_date"]
+        }
+    },
+    match: ctx => ctx.site && ctx.loggedIn && ctx.store.get(`sign_in.${ctx.site.code}.enabled`, true),
+    async init(ctx) {
+        const code = ctx.site.code;
+        const method = ctx.store.get(`sign_in.${code}.method`, 0);
+        const now = (() => {
+            const off = new Date().getTimezoneOffset() + 480;  // UTC+8
+            const bj = new Date(Date.now() + off * 60000);
+            return `${bj.getFullYear()}/${bj.getMonth() + 1}/${bj.getDate()}`;
+        })();
+        if (ctx.store.get(`sign_in.${code}.last_date`) === now) return;
+        try {
+            const r = await net.post(`/api/attendance?random=${method === 1}`);
+            ctx.store.set(`sign_in.${code}.last_date`, now);
+            if (r?.success) {
+                ctx.ui.success?.(`签到成功！+${r.gain}🍗，共${r.current}🍗`);
+            } else {
+                ctx.ui.info?.(r?.message || "签到失败");
+            }
+        } catch (e) { ctx.ui.info?.(e?.message || "签到错误"); }
+    }
 };
 ```
 
-**好处**：
-- 特性互相独立，新增/删除只改一个 `define()` 调用
-- `match` 函数让模块在不该运行时自动跳过
-- `meta` 描述了 UI（label / group / fields），设置面板可自动生成
-- `deps + order` 让启动顺序可声明式管理
+### 2.2 共享 ctx 对象
 
-### 2.2 共享 ctx（context）
-
-所有模块共享一个 `ctx` 对象：
-
-```js
-{
-  site, loggedIn, store, ui, user, $$, $, obs, uw, ...
-}
+```javascript
+// 真实源码——ctx 在 boot() 时组装
+const ctx = {
+    site,           // { host, code, name }
+    loggedIn,       // 从 DOM 检测
+    store,          // { get(path, fallback), set(path, value), init(), getDefaults() }
+    ui,             // { toast(msg, style), success(msg), info(msg), warning(msg), error(msg) }
+    user,           // 当前用户信息
+    $$, $, obs, uw, // 工具函数
+};
 ```
 
-模块通过 `init(ctx)` 拿到所需能力，没有跨模块的"单例查找"。
+### 2.3 Toast 系统（基于 layui）
 
-### 2.3 存储抽象（store）
+```javascript
+// 真实源码（行 3456-3460）
+// ui 模块提供 toast 方法，底层调用 layui 的 layer.msg()
+toast: (text, style) => {
+    const idx = layer.msg(text, { offset: 't', area: ['100%', 'auto'], anim: 'slideDown' });
+    layer.style(idx, Object.assign({ opacity: 0.9 }, style));
+    return idx;
+},
+// 便捷方法：
+info:    msg => ctx.ui.toast(msg, { "background-color": "#4D82D6" }),
+success: msg => ctx.ui.toast(msg, { "background-color": "#57BF57" }),
+warning: msg => ctx.ui.toast(msg, { "background-color": "#D6A14D" }),
+error:   msg => ctx.ui.toast(msg, { "background-color": "#E1715B" }),
+```
 
-- `store.get(path, fallback)` / `store.set(path, value)` — 路径式（如 `sign_in.ns.enabled`）
-- 内部用 `merge()` + `Map` 聚合每个模块的 `cfg` defaults
-- `getDefaults()` 总是返回合并后的完整默认树，避免"局部设置丢失"
+**关键发现**：nodeseek 的 toast 依赖外部 `layui` 库，linux-sb-suite 不能直接照搬（我们没有 layui）。但其 `{ success, info, warning, error }` 四类型 + 颜色映射的模式值得借鉴。
 
-### 2.4 网络层（net）
+### 2.4 存储抽象（store）
 
-```js
+```javascript
+// 真实源码（行 131-146）
+const store = {
+    reg(id, cfg, meta) { ... },  // 注册模块的默认配置
+    getDefaults() { ... },       // 聚合所有模块的 cfg
+    init() {
+        cfgCache = GM_getValue("settings", null) || {};
+        merge(cfgCache, getDefaults());  // 缺失的 key 用默认值补全
+        GM_setValue("settings", cfgCache);
+        return cfgCache;
+    },
+    get(p, fb) { const v = getPath(this.init(), p); return v === undefined ? fb : v; },
+    set(p, v) { setPath(this.init(), p, v); GM_setValue("settings", cfgCache); }
+};
+```
+
+**特点**：所有设置存在一个 `GM_*` key 下（`settings`），通过点号路径访问（如 `sign_in.ns.enabled`）。初始化时用默认值补全缺失字段，避免"升级后新设置项缺失"的问题。
+
+### 2.5 网络层（net）
+
+```javascript
+// 真实源码（行 149-160）
 const net = {
-  get: async (url, opts) => fetch(BASE_URL + url, { credentials: "include", ...opts }),
-  post: async (url, body, opts) => fetch(..., { method: "POST", body: JSON.stringify(body), ...opts })
+    async fetch(url, { method = "GET", data, headers = {}, type = "json" } = {}) {
+        const r = await fetch(url.startsWith("http") ? url : env.BASE_URL + url, {
+            method, credentials: "include",
+            headers: { ...(data ? { "Content-Type": "application/json" } : {}), ...headers },
+            body: data ? JSON.stringify(data) : undefined
+        });
+        return r[type]().catch(() => null);
+    },
+    get: (u, h, t) => net.fetch(u, { headers: h, type: t }),
+    post: (u, d, h, t) => net.fetch(u, { method: "POST", data: d, headers: h, type: t })
 };
 ```
 
-**亮点**：所有 API 调用都通过 `BASE_URL` 拼接，避免硬编码域名，多站点（NS / DF）共用代码。
+### 2.6 模块启动（boot）
 
-### 2.5 观察者（Observer）
-
-```js
-class Observer {
-  watch(target, cb) { /* MutationObserver + 智能节流 */ }
-  on(key, cb) { /* 自定义事件总线 */ }
+```javascript
+// 真实源码（行 174-198）
+function boot(ctx) {
+    store.init();                                   // 1. 初始化存储
+    // 拓扑排序（按 deps + order）
+    const sorted = topologicalSort(modules);
+    sorted.forEach(m => {
+        if (m.match?.(ctx) !== false) {             // 2. match 早退检查
+            try { m.init?.(ctx); } catch (e) { ... } // 3. 初始化
+            if (ctx.watch) { ... }                   // 4. DOM 监听注册
+        }
+    });
 }
 ```
 
-统一管理 DOM 变更监听，避免每个模块各自 `new MutationObserver`。
+## 3. signinTips 实现细节（可借鉴）
 
-## 3. 可借鉴到 linux.sb Suite 的点
+```javascript
+// 真实源码（行 2914-2948）
+const signinTips = {
+    id: "signinTips",
+    deps: ["ui"],
+    order: 79,
+    match(ctx) {
+        if (!ctx.site || !ctx.loggedIn || !ctx.store.get("signin_tips.enabled", true)) return false;
+        return ctx.store.get(`sign_in.${ctx.site.code}.enabled`, true) === false;  // 仅当自动签到关闭时
+    },
+    init(ctx) {
+        addStyle("nsx-signtip", `.nsplus-tip{background:rgba(255,217,0,.8);padding:3px;text-align:center;animation:blink 5s ease infinite}...`);
+        // 日期去重
+        if (now === ctx.store.get(`sign_in.${code}.ignore_date`) || now === ctx.store.get(`sign_in.${code}.last_date`)) return;
+        // 插入 header 顶部
+        const header = $("header");
+        const tip = document.createElement("div");
+        tip.className = "nsplus-tip";
+        tip.innerHTML = `<p>今天还没签到！【<a>随机🍗</a>】【<a>5个🍗</a>】【<a>今天不提示</a>】</p>`;
+        header.appendChild(tip);
+        // 点击签到 → POST API → 成功后移除 tip
+        // 点击"今天不提示" → 写 ignore_date → 移除 tip
+    }
+};
+```
 
-### 3.1 `signinTips` —— 自动签到未开时的"顶部提醒条"
+## 4. 对 linux-sb-suite 的借鉴价值总结
 
-**当前 linux.sb Suite**：用户关闭自动签到后，唯一的提醒来自面板的"立即签到"按钮。如果用户忽略了面板，签到就漏了。
-
-**借鉴方案**：当 `autoSignin=false` 且今天未签到时，在页面顶部插入一个醒目的提示条（黄底闪烁），提供"立即签到"和"今天不再提醒"两个动作。
-
-**为什么值得做**：nodeseek 的 `signinTips` 是被多次提及的"小而有用"的功能，用户漏签率明显下降。
-
-**实现成本**：低。复用现有 `signin.getStatus()` + `core/css.mjs`。
-
-### 3.2 `history` —— 本地浏览历史抽屉
-
-**当前 linux.sb Suite**：无。
-
-**借鉴方案**：在面板里加一个"历史"图标，点击展开抽屉，列出最近 50 条访问的帖子/用户（按时间倒序，可点击跳转，可单条删除，可清空）。
-
-**为什么值得做**：论坛用户经常回看自己浏览过的帖子/用户，这是高频操作。
-
-**实现成本**：中。需要在 `core/poller` 之上加一个 `core/history.mjs`（或 `lib/history.mjs`），监听 `dom.onRouteChange`，写 GM_*。
-
-### 3.3 `userCardExt` —— 鼠标悬停用户卡片
-
-**当前 linux.sb Suite**：只能从面板进入自己的主页。
-
-**借鉴方案**：鼠标悬停任何 `a.avatar-profile-link` 时，延迟 300ms 弹出小卡片，显示该用户的"积分/等级/加入时间"。
-
-**为什么值得做**：浏览回帖时了解陌生用户非常常见。
-
-**实现成本**：中。需要在 `lib/` 里实现 `parseUserCard(html)`，并对每个用户卡片做一次 `getHtml` + 缓存（5min TTL）。
-
-### 3.4 `inlineUserInfo` —— 帖子作者区补全信息
-
-**当前 linux.sb Suite**：帖子作者区（`li.post-item`）只显示头像+昵称，不显示积分。
-
-**借鉴方案**：DOM 加载后，给每个 `li.post-item` 的 `.post-meta` 后追加"积分 N · 注册 N 天前"。
-
-**为什么值得做**：和 userCardExt 类似，但更轻量（不需要 hover）。
-
-**实现成本**：低-中。可以用 `lib/user-summary.mjs` 实现一个 `parseUserSummaryFromListItem(el)`，再用 `Observer` 监听帖子列表变更。
-
-### 3.5 `quickComment` —— 自定义快捷回复模板
-
-**当前 linux.sb Suite**：无。
-
-**借鉴方案**：在设置面板里添加"快捷回复模板"管理（CRUD），回帖页 textarea 上方插入"模板选择下拉"，点击即填入。
-
-**为什么值得做**：高频回帖用户节省大量打字时间。
-
-**实现成本**：中-高。需要在 `core/settings` 之上做模板管理 UI。
-
-### 3.6 `visitedColor` —— 已访问链接染色
-
-**当前 linux.sb Suite**：无。
-
-**借鉴方案**：用一个 `lib/visited-color.mjs` 注入一段 CSS，根据 `:visited` 给帖子标题染色（深色模式用浅紫，浅色模式用深紫）。
-
-**为什么值得做**：一行 CSS 就能做，提升"我在哪里看过"的体感。
-
-**实现成本**：极低。
-
-### 3.7 `timeChinese` —— 时间戳中文显示
-
-**当前 linux.sb Suite**：无。
-
-**借鉴方案**：在面板的"最近通知"里，把 "2026-08-12 12:34" 替换成"2 小时前"。
-
-**为什么值得做**：nodeseek 用户的实际反馈里这个功能被夸"很贴心"。
-
-**实现成本**：低。`lib/time-format.mjs` 即可。
-
-### 3.8 `instantPage` —— 悬停预取
-
-**当前 linux.sb Suite**：无。
-
-**借鉴方案**：监听 `mouseover` 帖子标题链接 200ms 后，调用 `fetch(url, { priority: "low" })`。
-
-**为什么值得做**：让"点击进入"变得瞬时。
-
-**实现成本**：低。
-
-## 4. 不建议直接借鉴的
-
-| 项                | 不建议的原因 |
-|-------------------|------------|
-| `aiComment`       | 涉及 LLM Key 管理、敏感操作（自动发评论），有违规风险；linux.sb 站规严格 |
-| `callout`         | linux.sb 用的是标准 Markdown，nodeseek 的 Callout 语法（`> [!info]`）是 GitHub 风格，linux.sb 未必支持 |
-| `codeHighlight`   | 现有 `code` 块已由论坛自身高亮（Prism），再叠一层会重复 |
-| `darkMode`        | 论坛本身有暗色主题，重复 |
-| `blockViewLevel`  | 是 nodeseek 的"按等级屏蔽"机制，linux.sb 没有这个概念 |
-
-## 5. 对架构的启发
-
-1. **特性即模块**：linux.sb Suite 现在的 `LSB.register()` 已经接近这个模式，但还缺少：
-   - `meta` 描述（设置面板自动生成）
-   - `match` 早退
-   - `order` 显式声明
-   - 路径式配置 `store.get(path)`
-2. **共享 ctx**：现在用 DI 注入 `({ config, dom, events })`，可以扩展为更完整的 ctx（加入 `store`, `ui`, `obs`）
-3. **Observer 单例**：现在每个模块自己 `MutationObserver`，可以收口
-4. **net 层**：现在用 `LSB.http.getHtml`，已经是统一层，不变
-5. **测试可借鉴性**：nodeseek 的 cfg / meta 模式让"特性"易于测试（输入 cfg → 期望 UI）
-
-## 6. 具体落地建议（按性价比排序）
-
-| 优先级 | 功能          | 预估工时 | 影响 |
-|--------|--------------|---------|------|
-| P0     | signinTips   | 2h      | 高（解决漏签） |
-| P0     | visitedColor | 0.5h    | 中（一眼看出） |
-| P1     | timeChinese  | 1h      | 中（体感好） |
-| P1     | history      | 3h      | 高（高频） |
-| P2     | userCardExt  | 4h      | 中（增强浏览） |
-| P2     | inlineUserInfo | 2h    | 中（同上） |
-| P3     | quickComment | 6h      | 高（但复杂） |
-| P3     | instantPage  | 1h      | 低（锦上添花） |
+| 借鉴点 | 优先级 | 说明 |
+|--------|--------|------|
+| toast 四类型模式 | P0 | `{ success, info, warning, error }` 颜色映射，与我们设计的 toast 一致 |
+| signinTips 顶部提醒 | P0 | 自动签到关闭时页面顶部黄底提示，防止漏签 |
+| 路径式存储 | P1 | `store.get("sign_in.ns.enabled")` 比扁平 key 更结构化 |
+| 设置补全 | P1 | `merge(cfgCache, defaults)` 解决升级后新设置项缺失 |
+| match 早退 | P1 | 模块在 `match` 返回 false 时跳过整个 init |
+| 双站点 code | P2 | `ns`/`df` 前缀，linux-sb-suite 可用于 `lsb`/`lbi` |
+| 日期字符串去重 | P2 | `YYYY/MM/DD` 格式比时间戳更直观 |
+| 外部依赖管理 | 注意 | nodeseek 依赖 layui，linux-sb-suite 应保持零外部依赖 |

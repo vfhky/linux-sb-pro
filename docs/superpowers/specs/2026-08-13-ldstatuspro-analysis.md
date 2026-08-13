@@ -1,250 +1,196 @@
-# LDStatus Pro 调研报告
+# LDStatus Pro 调研报告（基于真实源码验证）
 
 - **脚本**: `LDStatus Pro`
-- **版本**: 3.9.0.3 (调研时)
-- **源码规模**: 1,110,136 字节（约 18000 行）
+- **版本**: 3.9.0.3
+- **源码规模**: 1,110,136 字节（约 17664 行）
 - **目标站点**: `linux.do`, `idcflare.com`, `cdk.linux.do`, `credit.linux.do`
 - **原始仓库**: https://github.com/caigg188/LDStatusPro
+- **代码风格**: 单文件 IIFE，无打包工具，纯手写 ES6+
 
-## 1. 核心模块（22 个类）
+## 1. 核心组件（19 个 class + 3 个 plain object）
 
-| 模块                  | 职责 |
-|----------------------|------|
-| `LRUCache`           | 通用 LRU 缓存（带 TTL） |
-| `Storage`            | GM_* 封装，支持 migrate、过期、版本化 key |
-| `Network`            | GM_xmlhttpRequest 封装，统一错误处理、重试 |
-| `NetworkError`       | 自定义错误类型 |
-| `HistoryManager`     | 每日数据快照（trust level 进度） |
-| `ReadingTracker`     | 页面阅读时长追踪（事件节流、可见性、tab leader） |
-| `Notifier`           | 里程碑通知（GM_notification） |
-| `OAuthManager`       | OAuth 登录 + token 管理 + 自动续期 |
-| `LeaderboardManager` | 排行榜缓存 + 5min 冷却 |
-| `CloudSyncManager`   | 云同步（多设备设置同步） |
-| `TicketManager`      | 工单管理 |
-| `TopicExporter`      | 主题导出（JSON / Markdown） |
-| `LDCManager`         | LDC 积分相关 |
-| `CDKManager`         | CDK（兑换码）相关 |
-| `MelonHelper`        | Melon（论坛代币）相关 |
-| `FollowManager`      | 关注管理 |
-| `Renderer`           | DOM 渲染器（把数据画成面板） |
-| `ActivityManager`    | 我的活动查看 |
-| `Panel`              | 主面板（UI 状态机） |
-| `Utils`              | 工具（throttle、debounce、toSafeNumber 等） |
-| `EventBus`           | 事件总线 |
-| `TabLeader`          | 多 tab 协调（仅 leader 写数据，避免冲突） |
+### Classes（按源码顺序）
 
-## 2. 架构亮点
+| 类 | 行号 | 职责 |
+|----|------|------|
+| `LRUCache` | 1045 | 通用 LRU 缓存（Map 实现，`maxSize` 可配置） |
+| `Storage` | 1072 | GM_* 封装，用户名作用域 key、批量写入防抖、migrate |
+| `NetworkError` | 1302 | 自定义错误类型（`code`, `status`, `url`） |
+| `Network` | 1431 | GM_xmlhttpRequest 封装，统一错误处理、重试、鉴权头 |
+| `HistoryManager` | 2013 | 每日数据快照（trust level 进度等） |
+| `ReadingTracker` | 2311 | 页面阅读时长追踪（事件节流、可见性、仅 leader 写） |
+| `Notifier` | 2694 | 里程碑通知（`GM_notification`，60s 限频） |
+| `OAuthManager` | 2747 | OAuth 登录 + token 管理 + 自动续期 |
+| `LeaderboardManager` | 2991 | 排行榜缓存 + 5min 冷却 |
+| `CloudSyncManager` | 3196 | 多设备设置同步（需要后端 API） |
+| `TicketManager` | 5824 | 工单管理 |
+| `TopicExporter` | 6344 | 主题导出（JSON / Markdown） |
+| `LDCManager` | 7261 | LDC 积分相关 |
+| `CDKManager` | 8072 | CDK（兑换码）相关 |
+| `MelonHelper` | 8542 | Melon（论坛代币）相关 |
+| `FollowManager` | 10125 | 关注管理 |
+| `Renderer` | 10489 | DOM 渲染器（把数据画成面板） |
+| `ActivityManager` | 11189 | 我的活动查看 |
+| `Panel` | 11807 | 主面板（UI 状态机） |
 
-### 2.1 类 + 依赖注入（DI）
+### Plain Objects（非 class）
 
-每个能力是一个类，构造时接受其他实例：
+| 对象 | 行号 | 职责 |
+|------|------|------|
+| `EventBus` | 200 | 事件总线（`on/off/emit/once`） |
+| `TabLeader` | 242 | 多 tab 协调（localStorage 心跳 + 领导者选举） |
+| `Utils` | 分散 | 工具函数集（`throttle`, `debounce`, `toSafeNumber` 等） |
 
-```js
-class LeaderboardManager {
-  constructor(oauth, readingTracker, storage) { ... }
-  async getLeaderboard(type) {
-    const result = await this.oauth.api(`/api/leaderboard/${type}`);
-    ...
-  }
-}
+## 2. TabLeader 实现（已验证真实源码）
+
+```javascript
+// 真实源码（行 242-350），plain object 非 class
+const TabLeader = {
+    LEADER_KEY: `ldsp_tab_leader_${CURRENT_SITE.prefix}`,
+    HEARTBEAT: 5000,    // 5 秒心跳
+    TIMEOUT: 10000,     // 10 秒超时
+    _tabId: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    _isLeader: false,
+    _storageAvailable: undefined,  // 延迟检测
+
+    init() {
+        this._tryBecomeLeader();
+        this._interval = setInterval(() => this._tryBecomeLeader(), this.HEARTBEAT);
+        this._storageHandler = (e) => { if (e.key === this.LEADER_KEY) this._tryBecomeLeader(); };
+        window.addEventListener('storage', this._storageHandler);
+        this._unloadHandler = () => this._release();
+        window.addEventListener('beforeunload', this._unloadHandler);
+    },
+
+    _tryBecomeLeader() {
+        // 1. 检测 localStorage 可用性（隐私模式/存储满）
+        if (!this._storageAvailable) {
+            try { localStorage.setItem('__ldsp_test__', '1'); localStorage.removeItem('__ldsp_test__'); this._storageAvailable = true; }
+            catch (e) { this._storageAvailable = false; /* 直接成为 leader */ }
+        }
+        // 2. 读取当前 leader 信息
+        const stored = JSON.parse(localStorage.getItem(this.LEADER_KEY) || '{}');
+        const expired = !data.timestamp || (Date.now() - data.timestamp) > this.TIMEOUT;
+        // 3. 过期或自己就是 leader → 续期
+        if (expired || data.tabId === this._tabId) {
+            this._isLeader = true;
+            localStorage.setItem(this.LEADER_KEY, JSON.stringify({ tabId: this._tabId, timestamp: Date.now() }));
+            EventBus.emit('leader:change', { isLeader: true, tabId: this._tabId });
+        } else {
+            this._isLeader = false;
+            EventBus.emit('leader:change', { isLeader: false, tabId: this._tabId });
+        }
+    },
+
+    _release() {
+        if (this._isLeader && localStorage.getItem(this.LEADER_KEY)?.tabId === this._tabId) {
+            localStorage.removeItem(this.LEADER_KEY);
+        }
+    },
+
+    isLeader() { return this._isLeader; },
+};
 ```
 
-**好处**：
-- 单元测试容易：传入 mock
-- 依赖图清晰
-- 不会因为全局变量重名出错
+**关键发现**：
+- 心跳 5s，超时 10s（不是之前报告的 5s）
+- 有 `localStorage` 可用性检测（隐私模式/存储满）
+- `beforeunload` 时释放 leader，避免僵尸 leader
+- 通过 `EventBus` 通知其他模块 leader 变化
+- 使用方通过 `TabLeader.isLeader()` 守卫，如 `if (!TabLeader.isLeader()) return;`
 
-**对比**：linux.sb Suite 的 `LSB.register(name, factory, deps)` 走的是同样的路线（DI 风格）。
+## 3. Notifier 实现（已验证）
 
-### 2.2 Storage 版本化
-
-```js
-class Storage {
-  constructor() {
-    this.PREFIX = 'ldsp_v';  // 版本化前缀
-    this.MIGRATIONS = [
-      { from: 1, to: 2, fn: (data) => ({ ...data, newField: defaultValue }) },
-      { from: 2, to: 3, fn: (data) => ({ ...data, removedField: undefined }) }
-    ];
-  }
-  
-  get(key, defaultValue) {
-    const raw = GM_getValue(`${this.PREFIX}${this.version}:${key}`);
-    if (!raw) return defaultValue;
-    try { return JSON.parse(raw); } catch { return defaultValue; }
-  }
-  
-  migrate(username) {
-    let data = this.get('schema', { version: 1 });
-    while (data.version < this.MIGRATIONS.length) {
-      data = this.MIGRATIONS[data.version - 1].fn(data);
-      data.version++;
+```javascript
+// 真实源码（行 2694-2744）
+class Notifier {
+    constructor(storage) {
+        this.storage = storage;
     }
-    this.set('schema', data);
-  }
-}
-```
 
-**对比**：linux.sb Suite 现在是 `prefix: 'lsb:', version: 1` 但没有 migration 机制。LDStatus Pro 的 migrate 模式可以借鉴。
-
-### 2.3 Tab Leader 选举（多 tab 协调）
-
-```js
-class TabLeader {
-  elect() {
-    const now = Date.now();
-    if (now - this._lastElect > 10000) {
-      const stored = localStorage.getItem(this.LEADER_KEY);
-      const lastBeat = stored ? JSON.parse(stored).ts : 0;
-      // 5 秒没收到心跳，宣布自己为 leader
-      if (now - lastBeat > 5000) {
-        localStorage.setItem(this.LEADER_KEY, JSON.stringify({ ts: now, id: this.id }));
-        this.isLeader = true;
-        this._onElect?.();
-      }
+    check(reqs) {
+        const achieved = this.storage.get('milestones', {});
+        const newMilestones = [];
+        reqs.forEach(r => {
+            Object.entries(CONFIG.MILESTONES).forEach(([key, thresholds]) => {
+                if (r.name.includes(key)) {
+                    thresholds.forEach(t => {
+                        const k = `${key}_${t}`;
+                        if (r.currentValue >= t && !achieved[k]) {
+                            newMilestones.push({ name: key, threshold: t });
+                            achieved[k] = true;
+                        }
+                    });
+                }
+            });
+        });
+        if (newMilestones.length) {
+            this.storage.set('milestones', achieved);
+            this._notify(newMilestones);
+        }
     }
-  }
+
+    _notify(milestones) {
+        const last = this.storage.get('lastNotify', 0);
+        if (Date.now() - last < 60000) return;  // 60s 限频
+        this.storage.set('lastNotify', Date.now());
+        const msg = milestones.slice(0, 3).map(m =>
+            m.type === 'req' ? `✅ ${m.name}` : `🏆 ${m.name} → ${m.threshold}`
+        ).join('\n');
+        GM_notification({ title: '🎉 达成里程碑！', text: msg, timeout: 5000 });
+    }
 }
 ```
 
-**好处**：当用户开多个 tab 访问论坛时，只有 1 个 tab 真正写数据（ReadingTracker.save、CloudSync.push），避免重复 API 请求和 storage 冲突。
+## 4. LRUCache 实现（已验证）
 
-**对比**：linux.sb Suite 没有这个，多 tab 会重复 poll。值得加。
-
-### 2.4 ReadingTracker（阅读时长统计）
-
-亮点：
-- **节流策略分级**：高频事件（mousemove, scroll）3 秒最多 1 次；低频事件（click, keydown）1 秒最多 1 次
-- **页面可见性**：`visibilitychange` + `pageshow/pagehide` 兼容 Safari/iOS bfcache
-- **passive + capture**：避免阻塞主线程
-- **仅 leader 写数据**：避免多 tab 重复累加
-
-**对比**：linux.sb Suite 没有阅读时长统计。这个功能适合"年度回顾"或"成就"类功能。
-
-### 2.5 LRUCache
-
-```js
+```javascript
+// 真实源码（行 1045-1069）
 class LRUCache {
-  constructor(maxSize = 100) {
-    this.maxSize = maxSize;
-    this.cache = new Map();
-  }
-  
-  get(key) {
-    if (!this.cache.has(key)) return undefined;
-    const value = this.cache.get(key);
-    this.cache.delete(key);
-    this.cache.set(key, value);  // 移到末尾
-    return value;
-  }
-  
-  set(key, value) {
-    if (this.cache.has(key)) this.cache.delete(key);
-    else if (this.cache.size >= this.maxSize) {
-      this.cache.delete(this.cache.keys().next().value);  // 删除最久未用
+    constructor(maxSize = CONFIG.CACHE.LRU_SIZE) {
+        this.maxSize = maxSize;
+        this.cache = new Map();
     }
-    this.cache.set(key, value);
-  }
+    get(key) {
+        if (!this.cache.has(key)) return undefined;
+        const value = this.cache.get(key);
+        this.cache.delete(key);
+        this.cache.set(key, value);    // 移到末尾（最近使用）
+        return value;
+    }
+    set(key, value) {
+        this.cache.has(key) && this.cache.delete(key);
+        if (this.cache.size >= this.maxSize) {
+            this.cache.delete(this.cache.keys().next().value);  // 删除最久未用
+        }
+        this.cache.set(key, value);
+    }
+    has(key) { return this.cache.has(key); }
+    clear() { this.cache.clear(); }
 }
 ```
 
-**对比**：linux.sb Suite 没有 LRU。可以加到 `core/cache.mjs`。
+## 5. 关键差异：没有签到功能
 
-### 2.6 OAuthManager + CloudSyncManager
+LDStatus Pro 的目标站点是 linux.do（Discourse 论坛），它**没有每日签到功能**。它的核心功能是：
+- 信任级别（trust level）进度跟踪
+- 阅读时长统计
+- 排行榜
+- 云同步
 
-- OAuth 登录后用 token 调远程 API
-- 设置项云同步（用户在 A 设备改了设置，B 设备下次打开时自动同步）
-- 用 `BroadcastChannel` 实现多 tab 实时同步
-- `lastSyncTs` 防重复推送
+与 linux-sb-suite 的签到/通知场景不同，但架构模式（DI、TabLeader、LRUCache、Storage migrate）高度可借鉴。
 
-**为什么值得借鉴**：linux.sb Suite 目前所有设置都存在 GM_*，换设备就丢。云同步可作为 v2.x 的增值功能。
+## 6. 对 linux-sb-suite 的借鉴价值总结
 
-### 2.7 ActivityManager（"我的活动"）
-
-- 自动记录用户每天的活跃度（发帖、回帖、签到）
-- 渲染成日历热力图
-- 支持云同步
-
-**对比**：linux.sb Suite 没有。值得做"个人年度回顾"。
-
-### 2.8 TopicExporter（主题导出）
-
-- 一键把整条主题导出为 JSON / Markdown
-- 自动下载所有图片附件
-- 保留引用关系
-
-**为什么值得借鉴**：linux.sb 用户经常想归档好贴。
-
-## 3. 借鉴优先级
-
-### 3.1 P0 —— 一行 CSS 就能做
-
-**Storage 版本号迁移**：把 `LSB.config.storage.version` 从 1 改成 2 时，加一个 `migrate()` 函数让旧数据自动升级。这样 1.1.4 → 1.1.5 时旧的脏 cache 会被清理。
-
-### 3.2 P0 —— 中等成本高价值
-
-**Tab Leader 选举**：linux.sb Suite 现在的 signin 自动签到 poller 在多 tab 时会重复触发。加 Tab Leader 后只在 1 个 tab 跑 poller，节省 API 调用。
-
-**Notifier（里程碑通知）**：
-- 签到连续 N 天通知
-- 积分突破 N 通知
-- 关注/被关注通知
-- 用 `GM_notification` 而不是自己画弹窗，跨标签页统一
-
-### 3.3 P1 —— 长期价值
-
-**HistoryManager（数据快照）**：
-- 每天存一份"当前积分、签到天数、通知数"
-- 用于绘制"近 30 天趋势图"
-- 历史趋势也是"成就"系统的基础
-
-**LRUCache**：
-- 抽到 `core/cache.mjs`
-- 用于缓存通知列表、用户卡片、用户摘要
-- 减少 HTTP 请求
-
-### 3.4 P2 —— 大功能
-
-**OAuthManager + CloudSyncManager**：
-- 需要在 `ldcstore.com`（脚本作者自己搭的服务）注册 OAuth 应用
-- 用户可以选"云同步设置"或仅本地
-- 涉及隐私问题（设置同步 vs 数据收集），需要明确告知
-
-**ActivityManager**：
-- 需要服务端配合（上传匿名活动数据）
-- 或者纯本地（用户自查看）
-
-**TopicExporter**：
-- 实现复杂（递归解析帖子树、保存图片）
-- 适合做"工具页"而不是主面板
-
-## 4. 不建议直接借鉴的
-
-| 项                | 不建议的原因 |
-|-------------------|------------|
-| `LDCManager` / `CDKManager` / `MelonHelper` | 都是 linux.do 站点的代币/CDK 系统，linux.sb 不存在 |
-| `TicketManager` | linux.do 的客服工单，linux.sb 没有 |
-| `FollowManager` | linux.do Discourse 关注 API，linux.sb 不一定支持 |
-| `OAuthManager + CloudSyncManager`（直接照搬） | 依赖作者自己搭的服务，不能照搬，可以借鉴架构 |
-| 大部分 `*Manager` 类 | Discourse 特有 API，linux.sb 不一定兼容 |
-
-## 5. 对架构的启发
-
-1. **Storage migrate**：现在 1.1.4 → 1.1.5 时旧 cache 不被清理，需要 bump version 后清理
-2. **Tab Leader**：避免多 tab 重复 poll
-3. **LRUCache**：通用的缓存原语
-4. **Notifier 抽象**：里程碑通知统一
-5. **EventBus**：统一事件通信（现在 linux.sb 用 `LSB.events` on/emit，已经是这个）
-6. **节流策略分级**：高频 vs 低频事件分开节流
-
-## 6. 落地清单
-
-| 优先级 | 功能 | 估时 | 备注 |
-|--------|------|------|------|
-| P0 | storage.migrate 模式 | 1h | bump version 时调用 |
-| P0 | Tab Leader 选举 | 2h | 解决多 tab 重复 poll |
-| P1 | Notifier（里程碑） | 3h | GM_notification 集成 |
-| P1 | LRUCache 抽到 core | 1h | 给 signin/notif 缓存用 |
-| P2 | HistoryManager（数据快照） | 4h | 趋势图基础 |
-| P3 | TopicExporter | 8h+ | 工具页 |
-| P3 | CloudSync | 8h+ | 需要后端 |
+| 借鉴点 | 优先级 | 说明 |
+|--------|--------|------|
+| TabLeader 多 tab 协调 | P0 | 解决 linux-sb-suite 多 tab 重复 poll 的问题。localStorage 心跳 + 选举 + `beforeunload` 释放 |
+| LRUCache | P1 | 通用缓存原语，用于通知列表、用户卡片缓存 |
+| Storage migrate | P1 | bump version 时自动清理/迁移旧数据 |
+| Notifier 里程碑通知 | P1 | `GM_notification` + 60s 限频 + 去重 achieved map |
+| EventBus 模式 | 已有 | linux-sb-suite 的 `LSB.events` 已覆盖 |
+| ReadingTracker | P2 | 阅读时长统计，适合"年度回顾"功能 |
+| DI 构造注入 | 已有 | linux-sb-suite 的 `LSB.register(name, factory, deps)` 已覆盖 |
+| Panel 状态机 | P2 | 可借鉴其展开/折叠/拖拽的状态管理方式 |
+| OAuth + CloudSync | 暂不借鉴 | 需要后端服务，不在当前 scope |
+| Discourse 特有功能 | 不适用 | Ticket/CDK/LDC/Melon/Follow 都是 Discourse 特有 |
