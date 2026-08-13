@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-12T16:53:07.618Z
+ * built: 2026-08-13T15:20:18.430Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -871,6 +871,93 @@ function makeStore(gm, prefix) {
 }
 
 ;
+// lib/toast.mjs
+// Pure factory function for toast notifications. Zero external dependencies.
+// Inlined into the public build by build.mjs.
+
+const ICONS = { success: '✓', error: '✗', info: 'ℹ' };
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function createToastManager(opts) {
+  if (opts === void 0) opts = {};
+  var maxVisible = opts.maxVisible != null ? opts.maxVisible : 3;
+  var gap = opts.gap != null ? opts.gap : 8;
+  var durationMs = opts.durationMs != null ? opts.durationMs : 3000;
+  var containerId = opts.containerId || 'lsb-toast-container';
+
+  // Clamp duration to safe range.
+  if (durationMs < 1000) durationMs = 1000;
+  if (durationMs > 30000) durationMs = 30000;
+
+  var container = null;
+  var queue = [];
+
+  function ensureContainer() {
+    if (container) return container;
+    container = document.createElement('div');
+    container.id = containerId;
+    document.documentElement.appendChild(container);
+    return container;
+  }
+
+  function show(message, options) {
+    if (!message || typeof message !== 'string') return;
+    if (options === void 0) options = {};
+    var type = options.type || 'info';
+    var dur = options.durationMs != null ? options.durationMs : durationMs;
+    if (dur < 1000) dur = 1000;
+    if (dur > 30000) dur = 30000;
+
+    var ctr = ensureContainer();
+    var el = document.createElement('div');
+    el.className = 'lsb-toast';
+    el.dataset.type = type;
+    el.innerHTML = '<span class="lsb-toast-icon">' + (ICONS[type] || ICONS.info) + '</span>' +
+                   '<span class="lsb-toast-msg">' + escapeHtml(message) + '</span>';
+    el.addEventListener('click', function () { dismiss(el); });
+
+    ctr.appendChild(el);
+    queue.push(el);
+
+    while (queue.length > maxVisible) {
+      dismissEl(queue.shift());
+    }
+
+    var timer = setTimeout(function () { dismiss(el); }, dur);
+    el._lsbToastTimer = timer;
+
+    return el;
+  }
+
+  function dismiss(el) {
+    if (!el || el._lsbToastDismissed) return;
+    el._lsbToastDismissed = true;
+    clearTimeout(el._lsbToastTimer);
+    el.classList.add('lsb-toast-out');
+    setTimeout(function () { dismissEl(el); }, 200);
+  }
+
+  function dismissEl(el) {
+    var idx = queue.indexOf(el);
+    if (idx >= 0) queue.splice(idx, 1);
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function destroy() {
+    while (queue.length) { dismissEl(queue[0]); }
+    if (container && container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+    container = null;
+  }
+
+  return { show: show, dismiss: dismiss, destroy: destroy };
+}
+
+;
 // Read the logged-in user info from a parsed HTML document.
 //
 // Two-page safety: on a linux.sb user-profile page, the page's own
@@ -1290,6 +1377,13 @@ function _userIdFromHref(href) {
     });
   }
 
+  // =====================================================================
+  // Toast notification manager (infrastructure, not a module)
+  // =====================================================================
+  LSB.toast = (typeof createToastManager === 'function')
+    ? createToastManager({ maxVisible: 3, gap: 8, durationMs: 3000, containerId: 'lsb-toast-container' })
+    : { show: function() {}, dismiss: function() {}, destroy: function() {} };
+
     LSB.api = LSB.api || {};
   LSB.api.linuxSb = {
     isHome(href) {
@@ -1618,11 +1712,13 @@ function _userIdFromHref(href) {
         const btn = dom.$(LSB.api.linuxSb.selectors.checkinBtn);
         if (btn) {
           const t = dom.text(btn);
+          // Fetch once so the return value can carry the checkin stats.
+          const fetched = await _fetchStatus();
           if (/\u5df2\u7b7e\u5230/.test(t)) {
-            return { ok: true, status: "signed-in", source: "already-on-page" };
+            return { ok: true, status: "signed-in", source: "already-on-page", stats: fetched.stats };
           }
           btn.click();
-          return { ok: true, status: "submitted", source: "clicked" };
+          return { ok: true, status: "submitted", source: "clicked", stats: fetched.stats };
         }
       }
       // Otherwise fetch the checkin page, grab the CSRF, POST it.
@@ -1646,6 +1742,7 @@ function _userIdFromHref(href) {
         status: after.status,
         source: "http-post",
         httpStatus: res.status,
+        stats: after.stats,
       };
     }
 
@@ -1722,7 +1819,9 @@ function _userIdFromHref(href) {
       if (_signinPoller) { _signinPoller.stop(); _signinPoller = null; }
     }
 
-    events.on("user:changed", (u) => {
+    events.on("user:changed", function (u) {
+      // _startAuto() runs the poller's first tick immediately, which performs
+      // the checkin and emits signin:auto (toast handled there).
       if (u && u.isLoggedIn && getAutoSignin()) _startAuto();
       else _stopAuto();
     });
@@ -1736,7 +1835,24 @@ function _userIdFromHref(href) {
         try { LSB.storage.set("signin.lastSignedInAt", _state.lastSignedInAt, 0); } catch (e) {}
       }
     }
-    events.on("signin:auto", _persistLastSignedIn);
+
+    // Toast helper — safe even if LSB.toast is not yet initialized.
+    function _showSigninToast(result) {
+      if (!LSB.toast || typeof LSB.toast.show !== "function") return;
+      if (result && result.ok && result.status === "signed-in") {
+        var points = (result.stats && result.stats.total) ? " +" + result.stats.total + " 积分" : "";
+        LSB.toast.show("签到成功 ✓" + points, { type: "success" });
+      } else if (result && !result.ok && result.reason) {
+        if (result.reason !== "not-logged-in" && result.reason !== "unknown") {
+          LSB.toast.show("签到失败，请重试", { type: "error", durationMs: 5000 });
+        }
+      }
+    }
+
+    events.on("signin:auto", function (r) {
+      _persistLastSignedIn();
+      _showSigninToast(r);
+    });
     // Restore dedupe window across page loads.
     try {
       const v = LSB.storage.get("signin.lastSignedInAt");
@@ -2043,6 +2159,17 @@ function _userIdFromHref(href) {
       #lsb-panel .lsb-footer a:hover { color: #e5e7eb; text-decoration: underline; }
     `);
 
+    // Toast CSS (injected once, follows panel theme via CSS variables)
+    GM_addStyle('\x23lsb-toast-container{position:fixed;bottom:12px;right:12px;z-index:2147483647;display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}' +
+      '.lsb-toast{pointer-events:auto;max-width:300px;padding:10px 14px;border-radius:8px;font:13px/1.4 system-ui,sans-serif;color:var(--lsb-fg,#eee);background:var(--lsb-bg,rgba(20,22,28,0.94));border:1px solid var(--lsb-border,rgba(255,255,255,0.08));box-shadow:var(--lsb-shadow,0 8px 24px rgba(0,0,0,0.35));backdrop-filter:blur(8px);display:flex;align-items:center;gap:8px;animation:lsb-toast-in .25s ease-out;transition:opacity .2s,transform .2s}' +
+      '.lsb-toast.lsb-toast-out{opacity:0;transform:translateX(20px)}' +
+      '@keyframes lsb-toast-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}' +
+      '.lsb-toast[data-type=success]{border-left:3px solid \x234ade80}' +
+      '.lsb-toast[data-type=error]{border-left:3px solid \x23f87171}' +
+      '.lsb-toast[data-type=info]{border-left:3px solid \x2360a5fa}' +
+      '.lsb-toast-icon{flex:none;font-size:14px}' +
+      '.lsb-toast-msg{flex:1;min-width:0}');
+
     // -----------------------------------------------------------------
     // Build the panel.  Sections are rendered later from the registry.
     // -----------------------------------------------------------------
@@ -2127,6 +2254,11 @@ function _userIdFromHref(href) {
           root.style.setProperty("--lsb-fg", p.fg);
           root.style.setProperty("--lsb-border", p.border);
           root.style.setProperty("--lsb-shadow", p.shadow);
+          // Also set on documentElement so toast (outside #lsb-panel) inherits theme.
+          document.documentElement.style.setProperty("--lsb-bg", p.bg);
+          document.documentElement.style.setProperty("--lsb-fg", p.fg);
+          document.documentElement.style.setProperty("--lsb-border", p.border);
+          document.documentElement.style.setProperty("--lsb-shadow", p.shadow);
         } catch (e) { /* unknown theme */ }
       }
     }
@@ -2249,10 +2381,20 @@ function _userIdFromHref(href) {
       try {
         const r = await signin.performSignin();
         signinBtn.textContent = r.ok ? LSB.i18n.t("signin.status.signed") : "签到失败";
-        if (r.ok) setTimeout(() => refresh().catch(() => {}), 600);
+        if (r.ok) {
+          setTimeout(() => refresh().catch(() => {}), 600);
+          // Toast on manual signin success
+          if (LSB.toast && typeof LSB.toast.show === "function") {
+            var points = (r.stats && r.stats.total) ? " +" + r.stats.total + " 积分" : "";
+            LSB.toast.show("签到成功 ✓" + points, { type: "success" });
+          }
+        }
       } catch (err) {
         signinBtn.textContent = "签到失败";
         log_signin.warn(err);
+        if (LSB.toast && typeof LSB.toast.show === "function") {
+          LSB.toast.show("签到失败，请重试", { type: "error", durationMs: 5000 });
+        }
       } finally {
         signinBtn.disabled = false;
         setTimeout(() => { signinBtn.textContent = orig; }, 1500);
