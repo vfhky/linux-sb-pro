@@ -793,15 +793,10 @@
     }
 
     events.on("user:changed", function (u) {
-      if (u && u.isLoggedIn && getAutoSignin()) {
-        _startAuto();
-        // Immediate check on page load (poller also does periodic ticks).
-        ensureSignedIn().then(function (r) {
-          if (r && r.ok && r.action === "signed-in") _showSigninToast(r);
-        }).catch(function (e) { log.warn("init checkin failed", e); });
-      } else {
-        _stopAuto();
-      }
+      // _startAuto() runs the poller's first tick immediately, which performs
+      // the checkin and emits signin:auto (toast handled there).
+      if (u && u.isLoggedIn && getAutoSignin()) _startAuto();
+      else _stopAuto();
     });
     events.on("signin:auto-changed", (on) => {
       if (on && user && user.info && user.info.id) _startAuto();
