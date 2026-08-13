@@ -1354,10 +1354,20 @@
       try {
         const r = await signin.performSignin();
         signinBtn.textContent = r.ok ? LSB.i18n.t("signin.status.signed") : "签到失败";
-        if (r.ok) setTimeout(() => refresh().catch(() => {}), 600);
+        if (r.ok) {
+          setTimeout(() => refresh().catch(() => {}), 600);
+          // Toast on manual signin success
+          if (LSB.toast && typeof LSB.toast.show === "function") {
+            var points = (r.stats && r.stats.total) ? " +" + r.stats.total + " 积分" : "";
+            LSB.toast.show("签到成功 ✓" + points, { type: "success" });
+          }
+        }
       } catch (err) {
         signinBtn.textContent = "签到失败";
         log_signin.warn(err);
+        if (LSB.toast && typeof LSB.toast.show === "function") {
+          LSB.toast.show("签到失败，请重试", { type: "error", durationMs: 5000 });
+        }
       } finally {
         signinBtn.disabled = false;
         setTimeout(() => { signinBtn.textContent = orig; }, 1500);
