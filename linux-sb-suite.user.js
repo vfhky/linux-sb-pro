@@ -685,11 +685,13 @@
         const btn = dom.$(LSB.api.linuxSb.selectors.checkinBtn);
         if (btn) {
           const t = dom.text(btn);
+          // Fetch once so the return value can carry the checkin stats.
+          const fetched = await _fetchStatus();
           if (/\u5df2\u7b7e\u5230/.test(t)) {
-            return { ok: true, status: "signed-in", source: "already-on-page" };
+            return { ok: true, status: "signed-in", source: "already-on-page", stats: fetched.stats };
           }
           btn.click();
-          return { ok: true, status: "submitted", source: "clicked" };
+          return { ok: true, status: "submitted", source: "clicked", stats: fetched.stats };
         }
       }
       // Otherwise fetch the checkin page, grab the CSRF, POST it.
@@ -713,6 +715,7 @@
         status: after.status,
         source: "http-post",
         httpStatus: res.status,
+        stats: after.stats,
       };
     }
 
@@ -789,9 +792,16 @@
       if (_signinPoller) { _signinPoller.stop(); _signinPoller = null; }
     }
 
-    events.on("user:changed", (u) => {
-      if (u && u.isLoggedIn && getAutoSignin()) _startAuto();
-      else _stopAuto();
+    events.on("user:changed", function (u) {
+      if (u && u.isLoggedIn && getAutoSignin()) {
+        _startAuto();
+        // Immediate check on page load (poller also does periodic ticks).
+        ensureSignedIn().then(function (r) {
+          if (r && r.ok) _showSigninToast(r);
+        }).catch(function (e) { log.warn("init checkin failed", e); });
+      } else {
+        _stopAuto();
+      }
     });
     events.on("signin:auto-changed", (on) => {
       if (on && user && user.info && user.info.id) _startAuto();
@@ -803,7 +813,24 @@
         try { LSB.storage.set("signin.lastSignedInAt", _state.lastSignedInAt, 0); } catch (e) {}
       }
     }
-    events.on("signin:auto", _persistLastSignedIn);
+
+    // Toast helper — safe even if LSB.toast is not yet initialized.
+    function _showSigninToast(result) {
+      if (!LSB.toast || typeof LSB.toast.show !== "function") return;
+      if (result && result.ok && result.status === "signed-in") {
+        var points = (result.stats && result.stats.total) ? " +" + result.stats.total + " 积分" : "";
+        LSB.toast.show("签到成功 ✓" + points, { type: "success" });
+      } else if (result && !result.ok && result.reason) {
+        if (result.reason !== "not-logged-in" && result.reason !== "unknown") {
+          LSB.toast.show("签到失败，请重试", { type: "error", durationMs: 5000 });
+        }
+      }
+    }
+
+    events.on("signin:auto", function (r) {
+      _persistLastSignedIn();
+      _showSigninToast(r);
+    });
     // Restore dedupe window across page loads.
     try {
       const v = LSB.storage.get("signin.lastSignedInAt");
