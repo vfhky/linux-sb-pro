@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-13T15:46:42.381Z
+ * built: 2026-08-14T14:31:20.492Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -996,7 +996,7 @@ const SELECTORS = {
  */
 function readUserFromDocument(doc, helpers) {
   const { absUrl, dicebearForUserId, currentPath } = helpers;
-  const $ = (sel) => doc.querySelector(sel);
+  const $ = (sel, el) => (el || doc).querySelector(sel);
   const text = (el) => el ? (el.textContent || "").trim() : "";
   const attr = (el, name) => el ? el.getAttribute(name) : null;
   const src = (el) => el ? (el.src || el.getAttribute("src") || "") : "";
