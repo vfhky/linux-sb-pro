@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.1.5
+// @version      1.1.6
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @downloadURL https://update.greasyfork.org/scripts/590905.user.js
 // @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-14T14:31:20.492Z
+ * built: 2026-08-14T15:17:26.876Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -1091,7 +1091,7 @@ function _userIdFromHref(href) {
   return m ? Number(m[1]) : null;
 }
 ;if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.1.5" });
+  const LSB = (root.LSB = { __booted: true, version: "1.1.6" });
 
   // =====================================================================
   // core/config
