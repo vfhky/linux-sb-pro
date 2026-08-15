@@ -1190,13 +1190,19 @@
 
     GM_addStyle(`
       #lsb-panel {
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        --ease-out: cubic-bezier(0, 0.55, 0.45, 1);
+        --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+      }
+      #lsb-panel {
         position: fixed; z-index: 2147483646;
         font: 13px/1.5 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
         color: var(--lsb-fg, #e4e6ed);
         background: var(--lsb-bg, #12131a);
-        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
-        border-radius: 16px;
+        border: 1px solid rgba(0, 0, 0, 0.25);
+        border-radius: var(--r-lg);
         box-shadow: var(--lsb-shadow, 0 20px 48px rgba(0, 0, 0, 0.4));
         backdrop-filter: blur(20px) saturate(170%);
         -webkit-backdrop-filter: blur(20px) saturate(170%);
@@ -1205,19 +1211,59 @@
         max-width: 310px;
         min-width: 252px;
         overflow: hidden;
-        animation: lsb-panel-in 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-        transition: box-shadow 0.3s ease, border-color 0.3s ease;
+        animation: lsb-panel-in 0.4s var(--ease);
+        transition: box-shadow 0.3s ease, border-color 0.3s ease,
+          width 0.35s var(--ease), height 0.35s var(--ease), min-width 0.35s var(--ease),
+          max-width 0.35s var(--ease), max-height 0.35s var(--ease), border-radius 0.35s var(--ease);
       }
       @keyframes lsb-panel-in {
         from { opacity: 0; transform: translateY(10px) scale(0.96); }
         to { opacity: 1; transform: none; }
       }
       #lsb-panel:hover {
-        border-color: var(--lsb-border-strong, rgba(255, 255, 255, 0.1));
-        box-shadow: var(--lsb-glow, 0 0 0 1px rgba(107, 140, 239, 0.2), 0 20px 48px rgba(0, 0, 0, 0.5));
+        border-color: rgba(107, 140, 239, 0.35);
+        box-shadow: var(--lsb-glow, 0 0 0 1px rgba(107, 140, 239, 0.2), 0 20px 48px rgba(0, 0, 0, 0.5)), 0 0 24px rgba(107, 140, 239, 0.12);
       }
 
-      /* ================= header (LDStatus .ldsp-hdr) ================= */
+      /* ============ collapsed: 48px logo button (LDStatus) ============ */
+      #lsb-panel:not(.lsb-open) {
+        width: 48px !important; height: 48px !important;
+        min-width: 48px !important; max-width: 48px !important;
+        max-height: 48px !important;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #7a9bf5 0%, #5a7de0 50%, #5bb5a6 100%);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 20px rgba(107, 140, 239, 0.35);
+        cursor: pointer;
+      }
+      @media (hover: hover) {
+        #lsb-panel:not(.lsb-open):hover {
+          transform: scale(1.08);
+          box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4), 0 0 30px rgba(120, 160, 255, 0.5);
+        }
+      }
+      #lsb-panel:not(.lsb-open) .lsb-hdr {
+        padding: 0; justify-content: center; align-items: center;
+        height: 100%; min-height: 0; background: none;
+      }
+      #lsb-panel:not(.lsb-open) .lsb-hdr-text,
+      #lsb-panel:not(.lsb-open) .lsb-hdr-actions,
+      #lsb-panel:not(.lsb-open) .lsb-chevron,
+      #lsb-panel:not(.lsb-open) .lsb-notif-dot { display: none; }
+      #lsb-panel:not(.lsb-open) .lsb-site-icon {
+        width: 26px; height: 26px; border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+      }
+      #lsb-panel:not(.lsb-open) .lsb-details { max-height: 0 !important; opacity: 0; visibility: hidden; }
+      /* status dot overlays the collapsed button corner */
+      #lsb-panel:not(.lsb-open) .lsb-dot {
+        position: absolute; top: 2px; right: 2px;
+        width: 12px; height: 12px;
+        border: 2px solid rgba(0, 0, 0, 0.3);
+        box-shadow: none;
+      }
+
+      /* ============ header (LDStatus .ldsp-hdr) ============ */
       #lsb-panel .lsb-hdr {
         display: flex; align-items: center; gap: 10px;
         padding: 10px 12px;
@@ -1226,33 +1272,31 @@
         position: relative;
         background: linear-gradient(135deg, #5a7de0 0%, #4a6bc9 100%);
         transition: filter 0.25s ease;
+        flex-shrink: 0;
       }
       #lsb-panel .lsb-hdr::before {
-        content: "";
-        position: absolute; inset: 0;
+        content: ""; position: absolute; inset: 0;
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
         pointer-events: none;
       }
       #lsb-panel .lsb-hdr::after {
-        content: "";
-        position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+        content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
         background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
-        opacity: 0; transition: opacity 0.5s;
-        pointer-events: none;
+        opacity: 0; transition: opacity 0.5s; pointer-events: none;
       }
       #lsb-panel .lsb-hdr:hover::after { opacity: 1; }
       #lsb-panel .lsb-hdr:hover { filter: brightness(1.04); }
       #lsb-panel .lsb-site-icon {
         width: 26px; height: 26px;
-        border-radius: 50%; /* the favicon itself is a circle — show it as one */
+        border-radius: 50%;
         border: 2px solid rgba(255, 255, 255, 0.35);
         flex-shrink: 0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         object-fit: cover;
       }
       #lsb-panel .lsb-hdr-text {
-        display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-        min-width: 0; flex: 1 1 0; overflow: hidden;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+        min-width: 0; flex: 1 1 0; overflow: hidden; position: relative; z-index: 1;
       }
       #lsb-panel .lsb-title {
         font-weight: 800; font-size: 14px; color: #fff;
@@ -1260,10 +1304,13 @@
         line-height: 1.2; letter-spacing: -0.02em;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); max-width: 100%;
       }
+      /* version as a frosted pill (LDStatus .ldsp-ver-num) */
       #lsb-panel .lsb-ver {
-        font-size: 10px; color: rgba(255, 255, 255, 0.6);
-        line-height: 1.2; display: flex; align-items: center; gap: 4px;
-        overflow: hidden; max-width: 100%;
+        font-size: 9px; font-weight: 600; color: #fff;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 1px 7px; border-radius: 999px;
+        line-height: 1.5; display: inline-flex; align-items: center; gap: 3px;
+        backdrop-filter: blur(4px);
       }
       #lsb-panel .lsb-dot {
         width: 10px; height: 10px; border-radius: 50%;
@@ -1279,15 +1326,15 @@
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.45; transform: scale(0.75); }
       }
-      #lsb-panel .lsb-hdr-actions { display: flex; align-items: center; gap: 6px; }
+      #lsb-panel .lsb-hdr-actions { display: flex; align-items: center; gap: 6px; position: relative; z-index: 1; }
       #lsb-panel .lsb-hdr-btn {
-        width: 30px; height: 30px; border-radius: 9px;
+        width: 28px; height: 28px; border-radius: 8px;
         display: flex; align-items: center; justify-content: center;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(13, 18, 40, 0.38); /* dark chip so the white icon pops */
+        background: rgba(13, 18, 40, 0.38);
         color: #fff; font-size: 13px; line-height: 1;
         cursor: pointer; backdrop-filter: blur(4px);
-        transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.25s ease;
+        transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.25s var(--ease);
       }
       #lsb-panel .lsb-hdr-btn:hover {
         background: rgba(255, 255, 255, 0.25);
@@ -1297,7 +1344,7 @@
       /* Force the icon SVGs to their intended size — this site's layout
          otherwise collapses the intrinsic width (renders as a sliver). */
       #lsb-panel .lsb-hdr-btn svg {
-        width: 17px; height: 17px; flex: none;
+        width: 16px; height: 16px; flex: none;
       }
       #lsb-panel .lsb-hdr-btn:active { transform: translateY(0) scale(0.95); }
       #lsb-panel .lsb-notif-dot {
@@ -1315,29 +1362,28 @@
       #lsb-panel [hidden] { display: none !important; }
       #lsb-panel .lsb-chevron {
         display: flex; color: #fff; opacity: 0.85;
-        transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s;
+        transition: transform 0.3s var(--ease), opacity 0.2s;
       }
       #lsb-panel.lsb-open .lsb-chevron { transform: rotate(180deg); opacity: 1; }
 
-      /* ================= body ================= */
+      /* ============ body ============ */
       #lsb-panel .lsb-details {
         position: relative;
         max-height: 0; opacity: 0; visibility: hidden;
         overflow: hidden;
         font-size: 12px;
         transform: translateY(-8px);
-        transition: max-height 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease,
-          transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.38s;
+        transition: max-height 0.38s var(--ease), opacity 0.24s ease,
+          transform 0.34s var(--ease), visibility 0s linear 0.38s;
       }
       #lsb-panel.lsb-open .lsb-details {
         max-height: min(620px, 85vh); opacity: 1; visibility: visible;
         transform: translateY(0);
         overflow-y: auto;
-        transition: max-height 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease,
-          transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: max-height 0.38s var(--ease), opacity 0.24s ease, transform 0.34s var(--ease);
       }
 
-      /* ================= user card (LDStatus .ldsp-user) ================= */
+      /* ============ user card (LDStatus .ldsp-user) ============ */
       #lsb-panel .lsb-user {
         display: flex; align-items: center; justify-content: space-between; gap: 12px;
         padding: 12px 14px;
@@ -1346,25 +1392,30 @@
         position: relative;
       }
       #lsb-panel .lsb-user::before {
-        content: "";
-        position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
         background: linear-gradient(90deg, transparent, var(--lsb-accent, #6b8cef), transparent);
-        opacity: 0.3;
+        opacity: 0.35;
       }
       #lsb-panel .lsb-user-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
       #lsb-panel .lsb-avatar {
-        width: 36px; height: 36px;
-        border-radius: 50%; /* standard avatar shape for the real avatar image */
+        width: 40px; height: 40px;
+        border-radius: 12px;
         border: 2px solid var(--lsb-accent, #6b8cef);
         flex-shrink: 0; background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
         object-fit: cover;
         box-shadow: 0 4px 12px rgba(107, 140, 239, 0.2);
+        transition: transform 0.3s var(--ease), box-shadow 0.3s, border-color 0.2s;
+      }
+      #lsb-panel .lsb-avatar:hover {
+        transform: scale(1.08) rotate(-3deg);
+        border-color: var(--lsb-accent-light, #8aa4f4);
+        box-shadow: 0 6px 20px rgba(107, 140, 239, 0.35);
       }
       #lsb-panel .lsb-user-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
       #lsb-panel .lsb-user-name {
-        font-size: 14px; font-weight: 800; letter-spacing: -0.01em;
+        font-size: 15px; font-weight: 800; letter-spacing: -0.01em;
         color: var(--lsb-fg, #e4e6ed);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
       }
       #lsb-panel .lsb-user-meta {
         font-size: 11px; color: var(--lsb-fg-mut, #5d6275);
@@ -1375,8 +1426,9 @@
         display: inline-flex; align-items: center; gap: 5px;
         font-size: 12px; font-weight: 700; color: var(--lsb-ok, #5bb5a6);
         padding: 7px 16px; border-radius: 999px;
-        background: rgba(91, 181, 166, 0.1);
+        background: rgba(91, 181, 166, 0.12);
         border: 1px solid rgba(91, 181, 166, 0.3);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
       #lsb-panel .lsb-hero-btn {
         appearance: none; border: none; cursor: pointer;
@@ -1385,7 +1437,7 @@
         color: #fff;
         background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
         box-shadow: 0 4px 14px rgba(107, 140, 239, 0.35);
-        transition: filter 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        transition: filter 0.18s ease, box-shadow 0.18s ease, transform 0.18s var(--ease);
       }
       #lsb-panel .lsb-hero-btn:hover {
         filter: brightness(1.08);
@@ -1395,34 +1447,74 @@
       #lsb-panel .lsb-hero-btn:active { transform: translateY(0) scale(0.98); }
       #lsb-panel .lsb-hero-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; transform: none; }
 
-      /* ================= tabs (segmented pills) ================= */
+      /* ============ tabs: floating glass bar + sliding indicator (LDStatus) ============ */
       #lsb-panel .lsb-tabs {
-        display: flex; gap: 6px;
-        padding: 8px 12px;
-        background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95));
-        border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
+        position: relative; display: flex; gap: 5px;
+        padding: 7px 9px;
+        margin: 8px 10px 6px;
+        background: rgba(32, 36, 50, 0.62);
+        backdrop-filter: blur(20px) saturate(175%);
+        -webkit-backdrop-filter: blur(20px) saturate(175%);
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 14px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      #lsb-panel .lsb-tab-indicator {
+        position: absolute; top: 7px; left: 9px; height: calc(100% - 14px);
+        border-radius: 10px; pointer-events: none; z-index: 0;
+        opacity: 0;
+        transition: left 0.42s cubic-bezier(0.32, 1.2, 0.32, 1), width 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s ease;
+      }
+      #lsb-panel .lsb-tab-indicator.show { opacity: 1; }
+      #lsb-panel .lsb-tab-indicator-glass {
+        position: absolute; inset: 0; border-radius: inherit;
+        background: rgba(255, 255, 255, 0.14);
+        box-shadow: 0 7px 16px rgba(42, 64, 120, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+        border: 1px solid rgba(138, 164, 244, 0.4);
+      }
+      #lsb-panel .lsb-tab-indicator-shine {
+        position: absolute; top: 1px; left: 10%; right: 10%; height: 46%;
+        border-radius: 8px 8px 50% 50%;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.12) 45%, transparent 100%);
+        pointer-events: none;
       }
       #lsb-panel .lsb-tab {
-        flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-        padding: 7px 12px;
+        position: relative; z-index: 1;
+        flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+        padding: 7px 8px;
         border: none; background: transparent;
         color: var(--lsb-fg-sec, #9499ad);
-        font: inherit; font-size: 12px; font-weight: 600;
-        border-radius: 999px; cursor: pointer;
-        transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        font: inherit; font-size: 11px; font-weight: 600;
+        border-radius: 10px; cursor: pointer;
+        white-space: nowrap; min-width: 0; overflow: hidden;
+        transition: color 0.2s, transform 0.15s;
       }
-      #lsb-panel .lsb-tab .lsb-tab-ic { display: inline-flex; flex: none; }
-      #lsb-panel .lsb-tab:hover { color: var(--lsb-fg, #e4e6ed); background: rgba(255, 255, 255, 0.06); }
-      #lsb-panel .lsb-tab.active {
-        color: #fff;
-        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
-        box-shadow: 0 2px 10px rgba(107, 140, 239, 0.35);
+      #lsb-panel .lsb-tab::before {
+        content: ""; position: absolute; inset: 0; border-radius: inherit;
+        background: linear-gradient(150deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 55%, transparent 100%);
+        opacity: 0; transition: opacity 0.2s;
       }
+      #lsb-panel .lsb-tab::after {
+        content: ""; position: absolute; top: 1px; left: 10%; right: 10%; height: 46%;
+        border-radius: 8px 8px 50% 50%;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.12) 45%, transparent 100%);
+        opacity: 0; transition: opacity 0.2s;
+      }
+      #lsb-panel .lsb-tab .lsb-tab-ic { display: inline-flex; flex: none; position: relative; z-index: 1; transition: transform 0.25s var(--ease); }
+      #lsb-panel .lsb-tab .lsb-tab-text { position: relative; z-index: 1; overflow: hidden; text-overflow: ellipsis; }
+      #lsb-panel .lsb-tab:hover { color: var(--lsb-fg, #e4e6ed); transform: translateY(-1px); }
+      #lsb-panel .lsb-tab:hover::before { opacity: 1; }
+      #lsb-panel .lsb-tab.active { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22); }
+      #lsb-panel .lsb-tab.active::before { opacity: 0.28; }
+      #lsb-panel .lsb-tab.active::after { opacity: 0.68; }
+      #lsb-panel .lsb-tab.active .lsb-tab-ic { transform: scale(1.08); }
 
-      /* ================= content panes ================= */
+      /* ============ content panes + sections (card style) ============ */
       #lsb-panel .lsb-pane { display: none; }
-      #lsb-panel .lsb-pane.active { display: block; }
-      #lsb-panel .lsb-section { padding: 12px 14px 10px; }
+      #lsb-panel .lsb-pane.active { display: block; animation: lsb-enter 0.2s var(--ease-out); }
+      #lsb-panel .lsb-section { padding: 10px 12px; }
       #lsb-panel .lsb-section-title {
         font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
         color: var(--lsb-fg-mut, #5d6275); margin-bottom: 8px; font-weight: 600;
@@ -1435,8 +1527,11 @@
         border-radius: 999px; padding: 0 7px; min-width: 17px; text-align: center;
         line-height: 17px;
       }
-      #lsb-panel .lsb-notif-list { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; }
-      #lsb-panel .lsb-notif-list li { padding: 6px 10px; margin: 0 -10px; border-radius: 10px; font-size: 12px; transition: background 0.16s ease; }
+      #lsb-panel .lsb-notif-list { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: auto; }
+      #lsb-panel .lsb-notif-list li {
+        padding: 8px 10px; margin: 0 -6px; border-radius: 10px; font-size: 12px;
+        transition: background 0.16s ease;
+      }
       #lsb-panel .lsb-notif-list li:hover { background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95)); }
       #lsb-panel .lsb-notif-list a {
         color: var(--lsb-fg-sec, #9499ad); text-decoration: none; transition: color 0.16s ease;
@@ -1445,8 +1540,12 @@
       #lsb-panel .lsb-notif-list li:hover a { color: var(--lsb-fg, #e4e6ed); }
       #lsb-panel .lsb-notif-list .lsb-mention { color: var(--lsb-accent-light, #8aa4f4); font-weight: 600; }
       #lsb-panel .lsb-notif-list .lsb-empty { opacity: 0.55; font-style: italic; }
+      @keyframes lsb-enter {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: none; }
+      }
 
-      /* ================= settings pane ================= */
+      /* ============ settings pane ============ */
       #lsb-panel .lsb-settings {
         padding: 12px 14px;
         background: var(--lsb-bg-card, rgba(24, 26, 36, 0.92));
@@ -1517,7 +1616,7 @@
         left: 2px; top: 2px;
         width: 16px; height: 16px;
         background: #fff; border-radius: 50%;
-        transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: transform 0.22s var(--ease);
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
       }
       #lsb-panel .lsb-switch input:checked + .lsb-slider {
@@ -1537,7 +1636,6 @@
       #lsb-panel ::-webkit-scrollbar-thumb:hover { background: var(--lsb-scrollbar-hover, rgba(140,150,175,0.7)); }
       #lsb-panel .lsb-scrolling::-webkit-scrollbar-thumb { background: var(--lsb-scrollbar, rgba(140,150,175,0.5)); }
       #lsb-panel * { scrollbar-width: thin; scrollbar-color: var(--lsb-scrollbar, rgba(140,150,175,0.5)) transparent; }
-    
     `);
 
     // Toast CSS (injected once, follows panel theme via CSS variables)
@@ -1587,6 +1685,7 @@
           </div>
         </div>
         <div class="lsb-tabs" data-lsb="tabs">
+          <div class="lsb-tab-indicator"><div class="lsb-tab-indicator-glass"></div><div class="lsb-tab-indicator-shine"></div></div>
           <button type="button" class="lsb-tab active" data-lsb-tab="notif">
             <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
             ${LSB.i18n.t("notif.title")}
@@ -1799,13 +1898,24 @@
       renderSettings();
     });
     // Tab switching (LDStatus .ldsp-tabs with a sliding indicator).
+    function updateTabIndicator() {
+      const container = root.querySelector(".lsb-tabs");
+      const indicator = container ? container.querySelector(".lsb-tab-indicator") : null;
+      const active = container ? container.querySelector(".lsb-tab.active") : null;
+      if (!container || !indicator || !active) return;
+      indicator.style.left = active.offsetLeft + "px";
+      indicator.style.width = active.offsetWidth + "px";
+      indicator.classList.add("show");
+    }
     function activateTab(name) {
       root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === name));
       root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.toggle("active", p.dataset.lsbPane === name));
+      updateTabIndicator();
     }
     root.querySelectorAll(".lsb-tab").forEach((t) => {
       t.addEventListener("click", () => activateTab(t.dataset.lsbTab));
     });
+    updateTabIndicator();
 
     // Wire the in-panel auto-signin toggle.  signin.setAutoSignin() is the
     // ONLY writer — it persists through the settings registry ("signin.auto")
