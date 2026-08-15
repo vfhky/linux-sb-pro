@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.1.5
+// @version      1.2.1-dev
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @author       vfhky
 // @match        https://linux.sb/*
@@ -63,7 +63,7 @@
 
   // ----- guard: run once per page ---------------------------------------
   if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.1.5" });
+  const LSB = (root.LSB = { __booted: true, version: "1.2.1-dev" });
 
   // =====================================================================
   // core/config
@@ -297,11 +297,8 @@
   };
 
   // =====================================================================
-  // api/linuxSb  (selectors, URL patterns, response shape)
-  // =====================================================================
-  // =====================================================================
-  // core/i18n, core/settings, core/palettes, core/css, core/dom-sections
-  // (inlined at build time from core/*.mjs; the symbols are in the
+  // core/i18n, core/settings, core/dom-sections
+  // (inlined at build time from core/*.mjs; the symbols live in the
   // outer scope so this block can use them directly).
   // =====================================================================
   LSB.i18n = (typeof createI18n === "function")
@@ -321,6 +318,8 @@
     "panel.theme.light":   { zh: "浅色",     en: "Light" },
     "panel.theme.dark":    { zh: "深色",     en: "Dark" },
     "notif.title":         { zh: "通知",     en: "Notifications" },
+    "settings.group.panel": { zh: "面板",     en: "Panel" },
+    "settings.group.signin": { zh: "签到",    en: "Sign-in" },
     "notif.empty":         { zh: "暂无通知", en: "No notifications" },
     "signin.status.signed":   { zh: "已签到",  en: "Signed in" },
     "signin.status.unsigned": { zh: "未签到",  en: "Not signed in" },
@@ -336,6 +335,8 @@
       key: "panel.pos", type: "enum", group: "panel",
       label: { zh: "位置", en: "Position" },
       default: "BR", options: Object.keys(LSB.config.ui.positions),
+      // The settings popover renders a segmented control from this enum;
+      // picking a corner re-applies the panel via panel:reapply.
     });
     LSB.settings.register({
       key: "panel.theme", type: "enum", group: "panel",
@@ -346,6 +347,7 @@
       key: "signin.auto", type: "boolean", group: "signin",
       label: { zh: "自动签到", en: "Auto sign-in" },
       default: false,
+      hidden: true, // the panel's action row already has the auto-signin switch
     });
   }
 
@@ -372,7 +374,10 @@
       }).start()
     : null;
 
-    LSB.api = LSB.api || {};
+  // =====================================================================
+  // api/linuxSb  (selectors, URL patterns, response shape)
+  // =====================================================================
+  LSB.api = LSB.api || {};
   LSB.api.linuxSb = {
     isHome(href) {
       const u = LSB.utils.parseUrl(href || location.href);
@@ -532,7 +537,10 @@
         const doc = new DOMParser().parseFromString(html, "text/html");
         const title = dom.text(doc.querySelector("title"));
         const nickname = (title || "").split(" - ")[0].trim() || null;
-        const img = doc.querySelector("img");
+        // Prefer the sidebar user-card's avatar; fall back to the page's
+        // first <img> (old behaviour) only when the card is not rendered.
+        const img = doc.querySelector(".sidebar-card.user-card .user-avatar-big img.avatar-img")
+          || doc.querySelector("img");
         return {
           id: userId,
           nickname,
@@ -758,16 +766,39 @@
       return { ok: false, status: s.status, reason: "unknown" };
     }
 
-        /** Public: read the persisted auto-signin preference. */
+    /** Public: read the persisted auto-signin preference. */
     function getAutoSignin() {
-      const v = LSB.storage.get("signin.autoSignin");
-      if (v === true || v === false) return v;
+      // Single source of truth: the settings registry ("signin.auto").
+      // Fall back to the config default only when the registry is absent.
+      if (LSB.settings && typeof LSB.settings.get === "function") {
+        try { return !!LSB.settings.get("signin.auto").get(); } catch (e) { /* fall through */ }
+      }
       return !!config.signin.autoSignin;
     }
     function setAutoSignin(on) {
-      LSB.storage.set("signin.autoSignin", !!on, 0);
-      events.emit("signin:auto-changed", !!on);
+      on = !!on;
+      // setAutoSignin is the ONLY writer: persist via the settings registry
+      // (which also notifies subscribers) and emit the module event.
+      if (LSB.settings && typeof LSB.settings.get === "function") {
+        try { LSB.settings.get("signin.auto").set(on); } catch (e) { /* registry unavailable */ }
+      }
+      events.emit("signin:auto-changed", on);
     }
+
+    // One-shot migration: builds before 1.2.1 stored the auto-signin pref
+    // under the raw storage key "signin.autoSignin".  Move it into the
+    // settings registry once, then drop the legacy key.
+    try {
+      const legacy = LSB.storage.get("signin.autoSignin");
+      if (legacy === true || legacy === false) {
+        if (LSB.settings && typeof LSB.settings.get === "function") {
+          if (legacy && !LSB.settings.get("signin.auto").get()) {
+            LSB.settings.get("signin.auto").set(legacy);
+          }
+        }
+        LSB.storage.del("signin.autoSignin");
+      }
+    } catch (e) { /* migration is best-effort */ }
 
     // Auto signin: drive a 5-minute poller; 20h dedupe window so we do not
     // re-signin within the same day. The poller stops when the user logs
@@ -862,7 +893,7 @@
     };
   }, ["config", "dom", "events", "http", "user"]);
 
-    // module: ui  (floating panel showing user info)
+  // module: panelStyle  (panel position + theme store, source of truth for ui)
   // =====================================================================
   LSB.register("panelStyle", function ({ config, events }) {
     const log = LSB.logger.make("panelStyle");
@@ -976,7 +1007,7 @@
         render: () => ({
           innerHTML:
             `<div class="lsb-section lsb-notif" data-lsb="notif-section">` +
-            `<div class="lsb-section-title">${LSB.i18n.t("notif.title")} (<span data-lsb="notif-count">0</span>)</div>` +
+            `<div class="lsb-section-title"><span>${LSB.i18n.t("notif.title")}</span><span class="lsb-notif-badge" data-lsb="notif-count">0</span></div>` +
             `<ul class="lsb-notif-list" data-lsb="notif-list"></ul>` +
             `</div>`,
         }),
@@ -986,7 +1017,7 @@
     return { name: "notif", init: bindUser };
   }, ["config", "http", "events", "user"]);
 
-  LSB.register("ui", function ({ config, dom, events, user, signin, panelStyle, notif }) {
+  LSB.register("ui", function ({ config, dom, events, user, signin, panelStyle }) {
     const log = LSB.logger.make("ui");
     const log_user = LSB.logger.make("ui/user");
     const log_signin = LSB.logger.make("ui/signin");
@@ -1012,14 +1043,15 @@
         position: fixed; z-index: 2147483646;
         font: 13px/1.5 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
-        color: var(--lsb-fg, #e8eaf2);
-        background: var(--lsb-bg, rgba(17, 19, 28, 0.88));
-        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.1));
-        border-radius: 18px;
-        box-shadow: var(--lsb-shadow, 0 20px 50px rgba(0, 0, 0, 0.5));
+        color: var(--lsb-fg, #e4e6ed);
+        background: var(--lsb-bg, #12131a);
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
+        border-radius: 16px;
+        box-shadow: var(--lsb-shadow, 0 20px 48px rgba(0, 0, 0, 0.4));
         backdrop-filter: blur(20px) saturate(170%);
         -webkit-backdrop-filter: blur(20px) saturate(170%);
         user-select: none;
+        width: min(310px, 92vw);
         max-width: 310px;
         min-width: 252px;
         overflow: hidden;
@@ -1031,92 +1063,93 @@
         to { opacity: 1; transform: none; }
       }
       #lsb-panel:hover {
-        border-color: var(--lsb-border-strong, rgba(255, 255, 255, 0.2));
-        box-shadow: var(--lsb-glow, 0 0 0 1px rgba(107, 140, 255, 0.22), 0 20px 50px rgba(0, 0, 0, 0.55));
+        border-color: var(--lsb-border-strong, rgba(255, 255, 255, 0.1));
+        box-shadow: var(--lsb-glow, 0 0 0 1px rgba(107, 140, 239, 0.2), 0 20px 48px rgba(0, 0, 0, 0.5));
       }
 
-      /* ================= header ================= */
+      /* ================= header (LDStatus .ldsp-hdr) ================= */
       #lsb-panel .lsb-hdr {
         display: flex; align-items: center; gap: 10px;
-        padding: 12px 12px 12px 10px;
+        padding: 10px 12px;
+        min-height: 52px;
         cursor: pointer;
         position: relative;
-        background: linear-gradient(135deg, #6b8cff 0%, #5b6cf8 52%, #8a63ff 100%);
-        transition: filter 0.25s ease, box-shadow 0.25s ease;
+        background: linear-gradient(135deg, #5a7de0 0%, #4a6bc9 100%);
+        transition: filter 0.25s ease;
       }
       #lsb-panel .lsb-hdr::before {
         content: "";
         position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 48%);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
         pointer-events: none;
       }
       #lsb-panel .lsb-hdr::after {
         content: "";
-        position: absolute; inset: 0;
-        background: linear-gradient(0deg, rgba(0, 0, 0, 0.16), transparent 42%);
+        position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
+        opacity: 0; transition: opacity 0.5s;
         pointer-events: none;
       }
-      #lsb-panel .lsb-hdr:hover { filter: brightness(1.08); }
-      #lsb-panel .lsb-hdr-text {
-        display: flex; flex-direction: column; gap: 1px;
-        min-width: 0; flex: 1;
-      }
-      #lsb-panel .lsb-name {
-        font-weight: 700; font-size: 13px; letter-spacing: 0.01em;
-        color: #fff;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-        max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      }
-      #lsb-panel .lsb-sub {
-        font-size: 10px; color: rgba(255, 255, 255, 0.72);
-        letter-spacing: 0.06em; font-weight: 500;
-      }
-      #lsb-panel .lsb-avatar {
-        width: 34px; height: 34px; border-radius: 50%;
-        background: rgba(255, 255, 255, 0.2); flex: none;
+      #lsb-panel .lsb-hdr:hover::after { opacity: 1; }
+      #lsb-panel .lsb-hdr:hover { filter: brightness(1.04); }
+      #lsb-panel .lsb-site-icon {
+        width: 26px; height: 26px; border-radius: 7px;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         object-fit: cover;
-        border: 2px solid rgba(255, 255, 255, 0.92);
-        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22), 0 2px 10px rgba(0, 0, 0, 0.25);
+      }
+      #lsb-panel .lsb-hdr-text {
+        display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+        min-width: 0; flex: 1 1 0; overflow: hidden;
+      }
+      #lsb-panel .lsb-title {
+        font-weight: 800; font-size: 14px; color: #fff;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        line-height: 1.2; letter-spacing: -0.02em;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); max-width: 100%;
+      }
+      #lsb-panel .lsb-ver {
+        font-size: 10px; color: rgba(255, 255, 255, 0.6);
+        line-height: 1.2; display: flex; align-items: center; gap: 4px;
+        overflow: hidden; max-width: 100%;
       }
       #lsb-panel .lsb-dot {
         width: 10px; height: 10px; border-radius: 50%;
         background: rgba(255, 255, 255, 0.7); flex: none;
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
         transition: background 0.2s ease, box-shadow 0.2s ease;
       }
-      #lsb-panel .lsb-dot.lsb-loading  { background: rgba(255,255,255,0.75); box-shadow: 0 0 0 2px rgba(255,255,255,0.5); animation: lsb-dot-pulse 1.2s ease-in-out infinite; }
-      #lsb-panel .lsb-dot.lsb-signed   { background: var(--lsb-ok, #34d399); box-shadow: 0 0 0 2px rgba(255,255,255,0.55), 0 0 12px rgba(52, 211, 153, 0.8); }
-      #lsb-panel .lsb-dot.lsb-unsigned { background: var(--lsb-warn, #fbbf24); box-shadow: 0 0 0 2px rgba(255,255,255,0.55), 0 0 12px rgba(251, 191, 36, 0.8); }
-      #lsb-panel .lsb-dot.lsb-guest    { background: rgba(255, 255, 255, 0.75); box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
+      #lsb-panel .lsb-dot.lsb-loading  { background: rgba(255,255,255,0.75); box-shadow: 0 0 0 2px rgba(255,255,255,0.4); animation: lsb-dot-pulse 1.2s ease-in-out infinite; }
+      #lsb-panel .lsb-dot.lsb-signed   { background: var(--lsb-ok, #5bb5a6); box-shadow: 0 0 0 2px rgba(255,255,255,0.45), 0 0 12px rgba(91, 181, 166, 0.8); }
+      #lsb-panel .lsb-dot.lsb-unsigned { background: var(--lsb-warn, #d4a853); box-shadow: 0 0 0 2px rgba(255,255,255,0.45), 0 0 12px rgba(212, 168, 83, 0.8); }
+      #lsb-panel .lsb-dot.lsb-guest    { background: rgba(255, 255, 255, 0.75); box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
       @keyframes lsb-dot-pulse {
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.45; transform: scale(0.75); }
       }
       #lsb-panel .lsb-hdr-actions { display: flex; align-items: center; gap: 6px; }
       #lsb-panel .lsb-hdr-btn {
-        width: 27px; height: 27px; border-radius: 50%;
+        width: 28px; height: 28px; border-radius: 8px;
         display: flex; align-items: center; justify-content: center;
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        background: rgba(255, 255, 255, 0.16);
-        color: #fff;
-        font-size: 13px; line-height: 1;
-        cursor: pointer;
-        backdrop-filter: blur(6px);
-        transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        border: none; background: rgba(255, 255, 255, 0.12);
+        color: #fff; font-size: 13px; line-height: 1;
+        cursor: pointer; backdrop-filter: blur(4px);
+        transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.25s ease;
       }
       #lsb-panel .lsb-hdr-btn:hover {
-        background: rgba(255, 255, 255, 0.3);
-        border-color: rgba(255, 255, 255, 0.7);
-        box-shadow: 0 0 14px rgba(255, 255, 255, 0.35);
-        transform: translateY(-1px);
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
+      #lsb-panel .lsb-hdr-btn:active { transform: translateY(0) scale(0.95); }
       #lsb-panel .lsb-notif-dot {
         position: relative;
-        min-width: 18px; height: 18px; padding: 0 5px;
+        min-width: 17px; height: 17px; padding: 0 5px;
         border-radius: 9999px;
         background: linear-gradient(135deg, #ff5f6d, #e64545);
         color: #fff;
-        font-size: 10px; line-height: 18px; font-weight: 700;
+        font-size: 10px; line-height: 17px; font-weight: 700;
         text-align: center;
         box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 2px 10px rgba(230, 69, 69, 0.6);
         margin-left: -2px;
@@ -1124,8 +1157,7 @@
       #lsb-panel .lsb-notif-dot[hidden] { display: none !important; }
       #lsb-panel [hidden] { display: none !important; }
       #lsb-panel .lsb-chevron {
-        font-size: 11px; color: #fff;
-        opacity: 0.85;
+        display: flex; color: #fff; opacity: 0.85;
         transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s;
       }
       #lsb-panel.lsb-open .lsb-chevron { transform: rotate(180deg); opacity: 1; }
@@ -1141,114 +1173,176 @@
           transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.38s;
       }
       #lsb-panel.lsb-open .lsb-details {
-        max-height: min(680px, 85vh); opacity: 1; visibility: visible;
+        max-height: min(620px, 85vh); opacity: 1; visibility: visible;
         transform: translateY(0);
         overflow-y: auto;
         transition: max-height 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease,
           transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
       }
-      #lsb-panel .lsb-details::before {
+
+      /* ================= user card (LDStatus .ldsp-user) ================= */
+      #lsb-panel .lsb-user {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 12px 14px;
+        background: var(--lsb-bg-card, rgba(24, 26, 36, 0.92));
+        border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
+        position: relative;
+      }
+      #lsb-panel .lsb-user::before {
         content: "";
-        position: absolute; top: 0; left: 18px; right: 18px; height: 1px;
-        background: linear-gradient(90deg, transparent, var(--lsb-accent, #6b8cff), transparent);
-        opacity: 0.55;
+        position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--lsb-accent, #6b8cef), transparent);
+        opacity: 0.3;
       }
-      #lsb-panel .lsb-section { padding: 12px 14px 10px; border-top: 1px solid var(--lsb-border, rgba(255,255,255,0.08)); }
-      #lsb-panel .lsb-section-title {
-        font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-        color: var(--lsb-fg-mut, #626a80); margin-bottom: 8px; font-weight: 600;
-        display: flex; align-items: center; gap: 6px;
+      #lsb-panel .lsb-user-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+      #lsb-panel .lsb-avatar {
+        width: 36px; height: 36px; border-radius: 10px;
+        border: 2px solid var(--lsb-accent, #6b8cef);
+        flex-shrink: 0; background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
+        object-fit: cover;
+        box-shadow: 0 4px 12px rgba(107, 140, 239, 0.2);
       }
-      #lsb-panel .lsb-section-title::before {
-        content: "";
-        width: 4px; height: 4px; border-radius: 50%;
-        background: var(--lsb-accent, #6b8cff);
-        box-shadow: 0 0 6px rgba(107, 140, 255, 0.6);
-      }
-      #lsb-panel .lsb-notif-list { list-style: none; margin: 0; padding: 0; max-height: 150px; overflow: auto; }
-      #lsb-panel .lsb-notif-list li { padding: 6px 10px; margin: 0 -10px; border-radius: 10px; font-size: 12px; transition: background 0.16s ease; }
-      #lsb-panel .lsb-notif-list li:hover { background: var(--lsb-bg-hover, rgba(255, 255, 255, 0.07)); }
-      #lsb-panel .lsb-notif-list a { color: var(--lsb-fg-sec, #9aa1b5); text-decoration: none; transition: color 0.16s ease; }
-      #lsb-panel .lsb-notif-list li:hover a { color: var(--lsb-fg, #e8eaf2); }
-      #lsb-panel .lsb-notif-list .lsb-mention { color: var(--lsb-accent-light, #93aaff); font-weight: 600; }
-      #lsb-panel .lsb-notif-list .lsb-empty { opacity: 0.55; font-style: italic; }
-
-      /* Custom scrollbar: thin, themed, hidden until the user actually
-         scrolls (LDStatus-style). The 6px gutter is always reserved so the
-         layout never jumps; the thumb fades in via .lsb-scrolling. */
-      #lsb-panel ::-webkit-scrollbar { width: 6px; height: 6px; }
-      #lsb-panel ::-webkit-scrollbar-track { background: transparent; }
-      #lsb-panel ::-webkit-scrollbar-thumb {
-        background: transparent;
-        border-radius: 999px;
-        transition: background 0.25s ease;
-      }
-      #lsb-panel ::-webkit-scrollbar-thumb:hover { background: var(--lsb-scrollbar-hover, rgba(255,255,255,0.34)); }
-      #lsb-panel .lsb-scrolling::-webkit-scrollbar-thumb { background: var(--lsb-scrollbar, rgba(255,255,255,0.18)); }
-      #lsb-panel * { scrollbar-width: thin; scrollbar-color: var(--lsb-scrollbar, rgba(255,255,255,0.18)) transparent; }
-
-      #lsb-panel .lsb-hdr-signed {
-        font-size: 10px; font-weight: 600; color: #fff;
-        display: inline-flex; align-items: center; gap: 4px;
-        height: 22px; padding: 0 10px; border-radius: 999px;
-        background: rgba(255, 255, 255, 0.18);
-        border: 1px solid rgba(255, 255, 255, 0.28);
-        white-space: nowrap;
-        flex: none;
-      }
-      #lsb-panel .lsb-hdr-btn.lsb-hdr-signin {
-        width: auto; height: 24px; padding: 0 13px; border-radius: 999px;
-        background: #fff; color: #5b6cf8;
-        font-size: 11px; font-weight: 700;
-        border: none;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-        backdrop-filter: none;
-      }
-      #lsb-panel .lsb-hdr-btn.lsb-hdr-signin:hover {
-        background: #f2f4ff; color: #5b6cf8;
-        filter: brightness(0.96);
-        box-shadow: 0 3px 14px rgba(0, 0, 0, 0.3);
-        transform: translateY(-1px);
-      }
-      #lsb-panel .lsb-hdr-btn.lsb-hdr-signin:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-
-      #lsb-panel .lsb-stats {
-        display: flex; gap: 8px; padding: 12px 14px 4px;
-      }
-      #lsb-panel .lsb-stat {
-        flex: 1; min-width: 0;
-        display: flex; align-items: center; gap: 8px;
-        padding: 8px 10px;
-        border-radius: 12px;
-        background: var(--lsb-bg-card, rgba(255, 255, 255, 0.045));
-        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.07));
-        transition: background 0.18s ease, border-color 0.18s ease;
-      }
-      #lsb-panel .lsb-stat:hover {
-        background: var(--lsb-bg-hover, rgba(255, 255, 255, 0.08));
-        border-color: var(--lsb-border-strong, rgba(255, 255, 255, 0.14));
-      }
-      #lsb-panel .lsb-stat-icon {
-        font-size: 14px; flex: none;
-        width: 28px; height: 28px; border-radius: 9px;
-        display: flex; align-items: center; justify-content: center;
-        background: linear-gradient(135deg, rgba(107, 140, 255, 0.22), rgba(124, 92, 255, 0.1));
-        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.08));
-      }
-      #lsb-panel .lsb-stat-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-      #lsb-panel .lsb-stat-val {
-        font-size: 13px; font-weight: 700; color: var(--lsb-fg, #e8eaf2);
+      #lsb-panel .lsb-user-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      #lsb-panel .lsb-user-name {
+        font-size: 14px; font-weight: 800; letter-spacing: -0.01em;
+        color: var(--lsb-fg, #e4e6ed);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
-      #lsb-panel .lsb-stat-label { font-size: 9px; color: var(--lsb-fg-mut, #626a80); letter-spacing: 0.06em; }
+      #lsb-panel .lsb-user-meta {
+        font-size: 11px; color: var(--lsb-fg-mut, #5d6275);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      #lsb-panel .lsb-signin-hero { flex-shrink: 0; }
+      #lsb-panel .lsb-hero-signed {
+        display: inline-flex; align-items: center; gap: 5px;
+        font-size: 12px; font-weight: 700; color: var(--lsb-ok, #5bb5a6);
+        padding: 7px 16px; border-radius: 999px;
+        background: rgba(91, 181, 166, 0.1);
+        border: 1px solid rgba(91, 181, 166, 0.3);
+      }
+      #lsb-panel .lsb-hero-btn {
+        appearance: none; border: none; cursor: pointer;
+        font: inherit; font-size: 12px; font-weight: 700;
+        padding: 8px 20px; border-radius: 999px;
+        color: #fff;
+        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
+        box-shadow: 0 4px 14px rgba(107, 140, 239, 0.35);
+        transition: filter 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+      }
+      #lsb-panel .lsb-hero-btn:hover {
+        filter: brightness(1.08);
+        box-shadow: 0 6px 20px rgba(107, 140, 239, 0.45);
+        transform: translateY(-1px);
+      }
+      #lsb-panel .lsb-hero-btn:active { transform: translateY(0) scale(0.98); }
+      #lsb-panel .lsb-hero-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; transform: none; }
 
+      /* ================= tabs (LDStatus .ldsp-tabs) ================= */
+      #lsb-panel .lsb-tabs {
+        position: relative; display: flex; gap: 4px;
+        padding: 7px 10px;
+        background: rgba(32, 36, 50, 0.62);
+        border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
+      }
+      #lsb-panel .lsb-tab-indicator {
+        position: absolute; top: 7px; left: 10px; height: calc(100% - 14px);
+        border-radius: 8px; pointer-events: none; z-index: 0;
+        background: rgba(255, 255, 255, 0.12);
+        transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      #lsb-panel .lsb-tab {
+        position: relative; z-index: 1;
+        flex: 1; padding: 7px 10px;
+        border: none; background: transparent;
+        color: var(--lsb-fg-sec, #9499ad);
+        font: inherit; font-size: 12px; font-weight: 600;
+        border-radius: 8px; cursor: pointer;
+        transition: color 0.2s;
+      }
+      #lsb-panel .lsb-tab:hover { color: var(--lsb-fg, #e4e6ed); }
+      #lsb-panel .lsb-tab.active { color: #fff; }
+
+      /* ================= content panes ================= */
+      #lsb-panel .lsb-pane { display: none; }
+      #lsb-panel .lsb-pane.active { display: block; }
+      #lsb-panel .lsb-section { padding: 12px 14px 10px; }
+      #lsb-panel .lsb-section-title {
+        font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+        color: var(--lsb-fg-mut, #5d6275); margin-bottom: 8px; font-weight: 600;
+        display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      }
+      #lsb-panel .lsb-notif-badge {
+        font-size: 10px; font-weight: 700; color: var(--lsb-fg-sec, #9499ad);
+        background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95));
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.1));
+        border-radius: 999px; padding: 0 7px; min-width: 17px; text-align: center;
+        line-height: 17px;
+      }
+      #lsb-panel .lsb-notif-list { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; }
+      #lsb-panel .lsb-notif-list li { padding: 6px 10px; margin: 0 -10px; border-radius: 10px; font-size: 12px; transition: background 0.16s ease; }
+      #lsb-panel .lsb-notif-list li:hover { background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95)); }
+      #lsb-panel .lsb-notif-list a {
+        color: var(--lsb-fg-sec, #9499ad); text-decoration: none; transition: color 0.16s ease;
+        display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      #lsb-panel .lsb-notif-list li:hover a { color: var(--lsb-fg, #e4e6ed); }
+      #lsb-panel .lsb-notif-list .lsb-mention { color: var(--lsb-accent-light, #8aa4f4); font-weight: 600; }
+      #lsb-panel .lsb-notif-list .lsb-empty { opacity: 0.55; font-style: italic; }
+
+      /* ================= settings pane ================= */
+      #lsb-panel .lsb-settings {
+        padding: 12px 14px;
+        background: var(--lsb-bg-card, rgba(24, 26, 36, 0.92));
+        max-height: 240px;
+        overflow-y: auto;
+      }
+      #lsb-panel .lsb-settings[hidden] { display: none !important; }
+      #lsb-panel .lsb-settings h4 {
+        margin: 6px 0 8px; font-size: 10px; opacity: 0.7;
+        text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700;
+      }
+      #lsb-panel .lsb-settings .lsb-row {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 12px; padding: 6px 0; cursor: pointer;
+        color: var(--lsb-fg-sec, #9499ad);
+        transition: color 0.15s ease;
+      }
+      #lsb-panel .lsb-settings .lsb-row:hover { color: var(--lsb-fg, #e4e6ed); }
+      #lsb-panel .lsb-settings input[type=checkbox], #lsb-panel .lsb-settings input[type=radio] {
+        accent-color: var(--lsb-accent, #6b8cef);
+      }
+      #lsb-panel .lsb-setting-block { margin: 10px 0; }
+      #lsb-panel .lsb-setting-name {
+        display: block;
+        font-size: 10px; letter-spacing: 0.08em;
+        color: var(--lsb-fg-mut, #5d6275);
+        margin-bottom: 6px; font-weight: 600;
+      }
+      #lsb-panel .lsb-seg-group { display: flex; flex-wrap: wrap; gap: 6px; }
+      #lsb-panel .lsb-seg { position: relative; cursor: pointer; }
+      #lsb-panel .lsb-seg input { position: absolute; opacity: 0; pointer-events: none; }
+      #lsb-panel .lsb-seg span {
+        display: inline-flex; align-items: center;
+        padding: 6px 14px; border-radius: 999px;
+        font-size: 12px; color: var(--lsb-fg-sec, #9499ad);
+        background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95));
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.1));
+        transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+        user-select: none;
+      }
+      #lsb-panel .lsb-seg:hover span { color: var(--lsb-fg, #e4e6ed); border-color: var(--lsb-accent, #6b8cef); }
+      #lsb-panel .lsb-seg.active span {
+        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
+        color: #fff; border-color: transparent;
+        box-shadow: 0 2px 10px rgba(107, 140, 239, 0.35);
+      }
       #lsb-panel .lsb-action {
         display: flex; align-items: center; justify-content: space-between;
-        gap: 8px; padding: 12px 14px 12px;
-        margin-top: 8px;
-        border-top: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.07));
+        gap: 8px; padding: 12px 14px;
+        border-top: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
+        background: var(--lsb-bg-card, rgba(24, 26, 36, 0.92));
       }
-      #lsb-panel .lsb-action .lsb-label { color: var(--lsb-fg-sec, #9aa1b5); font-weight: 500; font-size: 12px; }
+      #lsb-panel .lsb-action .lsb-label { color: var(--lsb-fg-sec, #9499ad); font-weight: 600; font-size: 12px; }
       #lsb-panel .lsb-switch {
         position: relative; display: inline-block;
         width: 36px; height: 20px; flex: none;
@@ -1256,7 +1350,7 @@
       #lsb-panel .lsb-switch input { opacity: 0; width: 0; height: 0; }
       #lsb-panel .lsb-switch .lsb-slider {
         position: absolute; inset: 0;
-        background: var(--lsb-fg-mut, #4b5563);
+        background: var(--lsb-fg-mut, #5d6275);
         border-radius: 999px;
         transition: background 0.22s ease, box-shadow 0.22s ease;
         cursor: pointer;
@@ -1270,54 +1364,23 @@
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
       }
       #lsb-panel .lsb-switch input:checked + .lsb-slider {
-        background: var(--lsb-accent, #6b8cff);
-        box-shadow: 0 0 12px rgba(107, 140, 255, 0.4);
+        background: var(--lsb-accent, #6b8cef);
+        box-shadow: 0 0 12px rgba(107, 140, 239, 0.4);
       }
       #lsb-panel .lsb-switch input:checked + .lsb-slider::before { transform: translateX(16px); }
 
-      #lsb-panel .lsb-settings {
-        padding: 10px 14px;
-        border-top: 1px solid var(--lsb-border, rgba(255,255,255,0.08));
-        background: var(--lsb-bg-card, rgba(255, 255, 255, 0.03));
+      /* custom scrollbar: hidden until scrolling */
+      #lsb-panel ::-webkit-scrollbar { width: 5px; height: 5px; }
+      #lsb-panel ::-webkit-scrollbar-track { background: transparent; }
+      #lsb-panel ::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 999px;
+        transition: background 0.25s ease;
       }
-      #lsb-panel .lsb-settings[hidden] { display: none !important; }
-      #lsb-panel .lsb-settings h4 {
-        margin: 6px 0 6px; font-size: 10px; opacity: 0.65;
-        text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
-      }
-      #lsb-panel .lsb-settings label {
-        display: flex; align-items: center; gap: 8px;
-        font-size: 12px; padding: 5px 0; cursor: pointer;
-        color: var(--lsb-fg-sec, #9aa1b5);
-        transition: color 0.15s ease;
-      }
-      #lsb-panel .lsb-settings label:hover { color: var(--lsb-fg, #e8eaf2); }
-      #lsb-panel .lsb-settings input[type=checkbox], #lsb-panel .lsb-settings input[type=radio] {
-        accent-color: var(--lsb-accent, #6b8cff);
-      }
-      #lsb-panel .lsb-settings .lsb-btn {
-        appearance: none;
-        border: 1px solid var(--lsb-border-strong, rgba(255, 255, 255, 0.16));
-        background: var(--lsb-bg-hover, rgba(255, 255, 255, 0.06));
-        color: var(--lsb-fg-sec, #9aa1b5);
-        font: inherit; font-size: 12px;
-        padding: 5px 14px; border-radius: 999px;
-        cursor: pointer;
-        transition: all 0.16s ease;
-      }
-      #lsb-panel .lsb-settings .lsb-btn:hover {
-        color: var(--lsb-fg, #e8eaf2);
-        border-color: var(--lsb-accent, #6b8cff);
-      }
-
-      #lsb-panel .lsb-footer {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 9px 14px;
-        border-top: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.07));
-        font-size: 10px; color: var(--lsb-fg-mut, #626a80);
-      }
-      #lsb-panel .lsb-footer a { color: var(--lsb-fg-sec, #9aa1b5); text-decoration: none; transition: color 0.15s ease; }
-      #lsb-panel .lsb-footer a:hover { color: var(--lsb-accent-light, #93aaff); }
+      #lsb-panel ::-webkit-scrollbar-thumb:hover { background: var(--lsb-scrollbar-hover, rgba(140,150,175,0.7)); }
+      #lsb-panel .lsb-scrolling::-webkit-scrollbar-thumb { background: var(--lsb-scrollbar, rgba(140,150,175,0.5)); }
+      #lsb-panel * { scrollbar-width: thin; scrollbar-color: var(--lsb-scrollbar, rgba(140,150,175,0.5)) transparent; }
+    
     `);
 
     // Toast CSS (injected once, follows panel theme via CSS variables)
@@ -1338,58 +1401,53 @@
     root.id = "lsb-panel";
     root.dataset.pos = LSB.panelStyle ? LSB.panelStyle.pos : "BR";
     root.dataset.theme = LSB.panelStyle ? LSB.panelStyle.theme : "auto";
-    root.innerHTML = `
+        root.innerHTML = `
       <div class="lsb-hdr lsb-compact" data-lsb="compact">
-        <img class="lsb-avatar" data-lsb="avatar" alt="" />
+        <img class="lsb-site-icon" src="https://linux.sb/app/assets/index.svg" alt="linux.sb" />
         <div class="lsb-hdr-text">
-          <span class="lsb-name" data-lsb="name">…</span>
-          <span class="lsb-sub">linux.sb 助手</span>
+          <span class="lsb-title">linux.sb 助手</span>
+          <span class="lsb-ver">v<span data-lsb="version">0.0.0</span></span>
         </div>
         <span class="lsb-dot lsb-loading" data-lsb="dot" title="载入中"></span>
         <div class="lsb-hdr-actions">
-          <span data-lsb="signin-text" class="lsb-hdr-signed" hidden>✓ ${LSB.i18n.t("signin.status.signed")}</span>
-          <button type="button" class="lsb-hdr-btn lsb-hdr-signin" data-lsb="signin" hidden>签到</button>
-          <button type="button" class="lsb-hdr-btn" data-lsb="refresh" title="刷新">↻</button>
-          <button type="button" class="lsb-hdr-btn" data-lsb="gear" title="${LSB.i18n.t("panel.settings")}">⚙</button>
+          <button type="button" class="lsb-hdr-btn" data-lsb="refresh" title="刷新"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>
+          <button type="button" class="lsb-hdr-btn" data-lsb="gear" title="${LSB.i18n.t("panel.settings")}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></button>
         </div>
-        <span class="lsb-chevron">▾</span>
+        <span class="lsb-chevron"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
       <div class="lsb-details">
-        <div class="lsb-stats" data-lsb="rank-row">
-          <div class="lsb-stat">
-            <span class="lsb-stat-icon">🏅</span>
-            <div class="lsb-stat-body">
-              <span class="lsb-stat-val" data-lsb="rank">—</span>
-              <span class="lsb-stat-label">等级</span>
+        <div class="lsb-user" data-lsb="rank-row">
+          <div class="lsb-user-main">
+            <img class="lsb-avatar" data-lsb="avatar" alt="" />
+            <div class="lsb-user-info">
+              <span class="lsb-user-name" data-lsb="name">…</span>
+              <span class="lsb-user-meta" data-lsb="meta">—</span>
             </div>
           </div>
-          <div class="lsb-stat">
-            <span class="lsb-stat-icon">💎</span>
-            <div class="lsb-stat-body">
-              <span class="lsb-stat-val" data-lsb="points">—</span>
-              <span class="lsb-stat-label">积分</span>
-            </div>
-          </div>
-          <div class="lsb-stat">
-            <span class="lsb-stat-icon">🔥</span>
-            <div class="lsb-stat-body">
-              <span class="lsb-stat-val" data-lsb="streak">—</span>
-              <span class="lsb-stat-label">连续签到</span>
-            </div>
+          <div class="lsb-signin-hero">
+            <span data-lsb="signin-text" class="lsb-hero-signed" hidden>✓ ${LSB.i18n.t("signin.status.signed")}</span>
+            <button type="button" class="lsb-hero-btn" data-lsb="signin" hidden>签到</button>
           </div>
         </div>
-        <div class="lsb-sections" data-lsb="sections"></div>
-        <div class="lsb-action">
-          <span class="lsb-label">⚡ ${LSB.i18n.t("signin.auto")}</span>
-          <label class="lsb-switch">
-            <input type="checkbox" data-lsb="auto" />
-            <span class="lsb-slider"></span>
-          </label>
+        <div class="lsb-tabs" data-lsb="tabs">
+          <div class="lsb-tab-indicator"></div>
+          <button type="button" class="lsb-tab active" data-lsb-tab="notif">${LSB.i18n.t("notif.title")}</button>
+          <button type="button" class="lsb-tab" data-lsb-tab="settings">${LSB.i18n.t("panel.settings")}</button>
         </div>
-        <div class="lsb-settings" data-lsb="settings" hidden></div>
-        <div class="lsb-footer">
-          <a data-lsb="profile" href="#" target="_blank" rel="noopener">${LSB.i18n.t("panel.title")}</a>
-          <span data-lsb="version">v0.0.0</span>
+        <div class="lsb-content">
+          <div class="lsb-pane active" data-lsb-pane="notif">
+            <div class="lsb-sections" data-lsb="sections"></div>
+          </div>
+          <div class="lsb-pane" data-lsb-pane="settings">
+            <div class="lsb-settings" data-lsb="settings"></div>
+            <div class="lsb-action">
+              <span class="lsb-label">${LSB.i18n.t("signin.auto")}</span>
+              <label class="lsb-switch">
+                <input type="checkbox" data-lsb="auto" />
+                <span class="lsb-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -1407,12 +1465,19 @@
     const signinBtn = $("signin");
     const signinText = $("signin-text");
     const autoInput = $("auto");
-    const profileLink = $("profile");
     const versionEl = $("version");
     const sectionsHost = $("sections");
     const settingsHost = $("settings");
     const gear = $("gear");
-    versionEl.textContent = `v${LSB.version}`;
+    versionEl.textContent = LSB.version; // template already renders the "v" prefix
+
+    // Clicking the avatar opens the profile (the footer link was removed for
+    // a cleaner footer).
+    avatarEl.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const url = avatarEl.dataset.profileUrl;
+      if (url) window.open(url, "_blank", "noopener");
+    });
 
     function isLoggedIn() {
       return !!(user && user.info && user.info.id);
@@ -1515,21 +1580,36 @@
       const groups = LSB.settings.groups();
       const html = [];
       for (const g of groups) {
-        html.push(`<h4>${g}</h4>`);
-        for (const d of defs.filter((x) => x.group === g)) {
+        const groupDefs = defs.filter((x) => x.group === g && !x.hidden);
+        if (!groupDefs.length) continue; // skip groups with no visible settings
+        // Group header: prefer the i18n table (settings.group.<key>), fall
+        // back to the raw key.
+        html.push(`<h4>${LSB.i18n.t("settings.group." + g) || g}</h4>`);
+        for (const d of groupDefs) {
           const s = LSB.settings.get(d.key);
-          const label = LSB.i18n.t(d.label) || d.key;
+          // Label: a plain string wins; otherwise look the SETTINGS KEY up in
+          // the i18n table (e.g. "panel.pos" -> 位置). Passing the label
+          // object to t() would render as "[object Object]".
+          const label = (typeof d.label === "string")
+            ? d.label
+            : (LSB.i18n.t(d.key) || d.key);
           if (d.type === "boolean") {
-            html.push(`<label><input type="checkbox" data-lsb-setting="${d.key}"${s.get() ? " checked" : ""}> ${label}</label>`);
+            html.push(`<label class="lsb-row"><input type="checkbox" data-lsb-setting="${d.key}"${s.get() ? " checked" : ""}><span>${label}</span></label>`);
           } else if (d.type === "enum") {
+            // Each enum setting gets its own named block with segmented
+            // pill options — much clearer than a long radio column.
+            html.push(`<div class="lsb-setting-block">`);
+            html.push(`<span class="lsb-setting-name">${label}</span>`);
+            html.push(`<div class="lsb-seg-group">`);
             for (const opt of d.options) {
-              const optLabel = LSB.i18n.t(d.label + "." + opt) || opt;
-              html.push(`<label><input type="radio" name="lsb-${d.key}" data-lsb-setting="${d.key}" data-lsb-value="${opt}"${s.get() === opt ? " checked" : ""}> ${optLabel}</label>`);
+              const optLabel = LSB.i18n.t(d.key + "." + opt) || opt;
+              const active = s.get() === opt ? " active" : "";
+              html.push(`<label class="lsb-seg${active}"><input type="radio" name="lsb-${d.key}" data-lsb-setting="${d.key}" data-lsb-value="${opt}"${active ? " checked" : ""}><span>${optLabel}</span></label>`);
             }
+            html.push(`</div></div>`);
           }
         }
       }
-      html.push(`<div style="text-align:right;margin-top:8px"><button type="button" class="lsb-btn" data-lsb="settings-close">${LSB.i18n.t("panel.close")}</button></div>`);
       settingsHost.innerHTML = html.join("");
     }
     settingsHost.addEventListener("change", (ev) => {
@@ -1542,28 +1622,39 @@
       if (def.type === "boolean") s.set(el.checked);
       else s.set(el.getAttribute("data-lsb-value") || el.value);
     });
-    settingsHost.addEventListener("click", (ev) => {
-      if (ev.target.closest("[data-lsb=settings-close]")) settingsHost.hidden = true;
-    });
+    // Gear switches to the Settings tab (LDStatus-style tabs, no popover).
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      // Opening the settings implies showing the panel (the settings host
-      // lives inside the collapsed-by-default details area).
       root.classList.add("lsb-open");
+      activateTab("settings");
       renderSettings();
-      settingsHost.hidden = false;
     });
-    document.addEventListener("click", (ev) => {
-      if (settingsHost.hidden) return;
-      if (settingsHost.contains(ev.target) || gear.contains(ev.target)) return;
-      settingsHost.hidden = true;
+    // Tab switching (LDStatus .ldsp-tabs with a sliding indicator).
+    function updateTabIndicator() {
+      const container = root.querySelector(".lsb-tabs");
+      const indicator = root.querySelector(".lsb-tab-indicator");
+      const active = container ? container.querySelector(".lsb-tab.active") : null;
+      if (!container || !indicator || !active) return;
+      indicator.style.width = Math.round(active.offsetWidth) + "px";
+      indicator.style.transform = `translateX(${active.offsetLeft}px)`;
+    }
+    function activateTab(name) {
+      root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === name));
+      root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.toggle("active", p.dataset.lsbPane === name));
+      updateTabIndicator();
+    }
+    root.querySelectorAll(".lsb-tab").forEach((t) => {
+      t.addEventListener("click", () => activateTab(t.dataset.lsbTab));
     });
 
-    // Wire the in-panel auto-signin toggle + the settings registry.
+    // Wire the in-panel auto-signin toggle.  signin.setAutoSignin() is the
+    // ONLY writer — it persists through the settings registry ("signin.auto")
+    // and emits signin:auto-changed, which (re)starts the auto-checkin poller.
     if (LSB.settings) {
       const s = LSB.settings.get("signin.auto");
       autoInput.checked = !!s.get();
-      autoInput.addEventListener("change", () => s.set(autoInput.checked));
+      // Reflect external changes (e.g. the settings registry being written
+      // programmatically) back onto the switch.
       s.subscribe((v) => { autoInput.checked = !!v; });
     }
     autoInput.addEventListener("change", () => {
@@ -1655,15 +1746,14 @@
         nameEl.textContent = "未登录";
         dot.className = "lsb-dot lsb-guest";
         dot.title = LSB.i18n.t("signin.status.guest");
-        signinText.hidden = true;
+        if (signinText) signinText.hidden = true;
         signinBtn.hidden = true;
         $("rank-row").hidden = true;
-        profileLink.removeAttribute("href");
         return;
       }
       if (u.avatarUrl) avatarEl.src = u.avatarUrl;
       nameEl.textContent = u.nickname || `用户 #${u.id}`;
-      if (u.profileUrl) profileLink.href = u.profileUrl;
+      if (u.profileUrl) avatarEl.dataset.profileUrl = u.profileUrl;
 
       if (typeof signin.getAutoSignin === "function") {
         autoInput.checked = !!signin.getAutoSignin();
@@ -1680,16 +1770,19 @@
         dot.title = _signinLabel(s.status);
         const isSigned = s.status === "signed-in";
         const isPending = s.status === "not-signed-in";
-        signinText.hidden = !isSigned;
+        // Sign-in hero in the user card.
+        if (signinText) signinText.hidden = !isSigned;
         signinBtn.hidden = !isPending;
         $("rank-row").hidden = !(isSigned || isPending);
-        // Stat chips: rank / points / signin streak.
+        // User meta line: rank · points · signin streak.
         const rankParts = u.rank ? u.rank.split("·").map((x) => x.trim()).filter(Boolean) : [];
-        $("rank").textContent = rankParts[0] || "—";
-        $("points").textContent = (u.points != null && u.points !== "") ? String(u.points) : "—";
-        $("streak").textContent = (s.stats && s.stats.streak) ? String(s.stats.streak) : "—";
+        const metaBits = [];
+        if (rankParts[0]) metaBits.push(rankParts[0]);
+        if (u.points != null && u.points !== "") metaBits.push("积分 " + u.points);
+        if (s.stats && s.stats.streak) metaBits.push("连续签到 " + s.stats.streak + " 天");
+        $("meta").textContent = metaBits.join(" · ") || "—";
       } catch (err) {
-        signinText.hidden = true;
+        if (signinText) signinText.hidden = true;
         signinBtn.hidden = true;
         log_signin.warn(err);
       }
@@ -1702,7 +1795,7 @@
     refresh().catch((e) => log.warn(e));
 
     return { name: "ui", refresh };
-  }, ["config", "dom", "events", "user", "signin", "panelStyle", "notif"]);
+  }, ["config", "dom", "events", "user", "signin", "panelStyle"]);
 
   // =====================================================================
   // module: debug  (console banner + env dump)

@@ -62,6 +62,14 @@ export default async function run() {
     assert.equal(out.list.length, MAX_LIST);
     assert.equal(MAX_LIST, 5);
   }
+  // --- New-structure overflow: unread = RAW count, list capped ---
+  {
+    const out = parseNotifications(fx("notifications-many-new.html"));
+    assert.equal(out.unread, 8, "unread must be the raw item count, not the capped list length");
+    assert.equal(out.list.length, MAX_LIST, "returned list is capped at MAX_LIST");
+    assert.equal(out.list[0].kind, "mention");
+    assert.match(out.list[0].title, /第 1 条/);
+  }
   // --- Empty / non-string input ---
   {
     const out = parseNotifications("");

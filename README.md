@@ -14,21 +14,20 @@ After install, Tampermonkey auto-updates the script from Greasy Fork using the s
 
 ## Features
 
-### 1.1.3 (2026-08-12)
-
-- `fix(user)`: capture rank + points from sidebar card; visitor avatar letter fallback.
-- `fix(notif)`: user-scoped endpoint factory for `/user/<id>?tab=notifications`; auto-bust stale cache from 1.1.2.
-- `feat(signin)`: auto-checkin via 5-minute poller with 20h dedupe window (persists across page loads).
-- `test(fixtures)`: programmatic builders (`build-fixture.mjs`) so future fixture updates are one `node scripts/gen-fixtures.mjs` away.
-- chore: drop legacy 
-otif-unread-count reliance; new layout uses item list length as the unread count.
-
 - **Always-visible status pill**: avatar + nickname + a colored dot that reflects the daily check-in state (green = signed in, yellow = not yet, gray = guest).
 - **One-click sign-in**: expand the pill and tap `立即签到` if you have not signed in today.
-- **Auto sign-in**: a switch in the expanded panel enables automatic check-in on every page load. Persisted in `GM_*`, no per-session confirmation.
-- **Unread notifications**: a red dot on the pill shows unread count; expanding the panel shows the 5 most recent items. Polled every 60 s while the tab is visible, paused when the tab is hidden; falls back to 5 min polling after 3 consecutive errors.
-- **Panel position & theme**: click the gear inside the panel to move it to any of the four corners and pick a light / dark / system-following palette. Choices persist via `GM_setValue`; new themes and positions are config-only edits.
+- **Auto sign-in**: a switch in the expanded panel enables automatic check-in on every page load. Persisted via the settings registry (`GM_*`), no per-session confirmation.
+- **Unread notifications**: a red dot on the pill shows the raw unread count; expanding the panel shows the 5 most recent items. Polled every 60 s while the tab is visible, paused when the tab is hidden; falls back to 5 min polling after 3 consecutive errors.
+- **Panel position & theme**: the gear inside the panel opens a settings tab — pick one of the four corners and a light / dark / system-following palette. Choices persist via `GM_setValue`; new themes and positions are config-only edits.
+- **Multi-tab coordination**: only one tab polls (leader election via `localStorage` heartbeat), so N open tabs do not duplicate notification or auto-signin requests.
 - **Self-update**: Tampermonkey polls Greasy Fork's meta endpoint on its own schedule. New versions land with one click.
+
+### Changelog
+
+- **1.2.0** (2026-08-15): multi-tab leader election; LDStatus-grade panel redesign; node reference table; diff-style notification rendering; signin IO layer wired.
+- **1.1.6** (2026-08-14): avatar-scope fix — read the avatar only from the sidebar user-card, not the first `<img>` on the page.
+- **1.1.5** (2026-08-13): always show the logged-in user (two-page safety on `/user/<id>`); parse `/daily_checkin` through the unit-tested lib.
+- **1.1.3** (2026-08-12): user-scoped notification endpoint `/user/<id>?tab=notifications`; auto-checkin via 5-minute poller with 20h dedupe window; programmatic fixture builders.
 
 ## Privacy
 
@@ -49,6 +48,10 @@ LSB  (root namespace, the only global)
  +-- modules/   user, signin, panelStyle, notif, ui, debug
  +-- lib/    pure ESM, inlined into the public build by build.mjs
  +-- tabLeader  multi-tab leader election (localStorage heartbeat)
+
+`api/` and `modules/` live inline inside `linux-sb-suite.user.js` (the
+dev source); `core/*.mjs` and `lib/*.mjs` are real files that build.mjs
+inlines into the public bundle.
 ```
 
 `core/settings` is the registry every module writes through — adding a new setting is one `LSB.settings.register({...})` call; the popover inside the panel renders the controls automatically. `core/poller` is the generic setInterval-with-visibility-pause-and-backoff primitive that any future background module reuses; an optional `leader` gate makes only the leader tab tick. `lib/tab-leader.mjs` elects that leader with a localStorage heartbeat (5s heartbeat / 10s timeout / release on close), so opening linux.sb in N tabs does not duplicate notification or auto-signin requests. `core/css` and `core/palettes` together make position and theme data-driven — the CSS rules for the panel are emitted from `config.ui.positions` and `core/palettes.mjs`, not hand-written. `core/i18n` provides a `LSB.t(key, locale?)` API; all user-visible strings go through it.
@@ -74,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File start-chrome.ps1
 # Tampermonkey dashboard (or press the update-check button) — Tampermonkey
 # re-fetches the @updateURL and installs the new version automatically.
 
-# Run the unit tests (10 cases across core/ and lib/).
+# Run the unit tests (18 cases across core/, lib/ and test/).
 npm test
 ```
 
@@ -92,7 +95,7 @@ Release flow once a feature is ready:
 4. Greasy Fork's script page already has a "Source code" sync configured against the GitHub raw URL (`https://raw.githubusercontent.com/vfhky/linux-sb-pro/main/dist/linux-sb-suite.user.js`) in auto mode. The new version is detected on the next sync tick.
 5. Tampermonkey picks up the new meta from `@updateURL` on its own update check and offers the upgrade to installed users.
 
-The dev script's `@version` is left at the in-progress dev number (e.g. `0.3.6`); only the public release version is bumped in step 1.
+The dev script's `@version` is left at the in-progress dev number (e.g. `1.2.1-dev` — always above the latest released version, with a `-dev` suffix so it can never be mistaken for a release); only the public release version is bumped in step 1.
 
 ## License
 

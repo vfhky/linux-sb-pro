@@ -30,6 +30,10 @@ Thumbs.db
 
 # editor
 .vscode/
+
+# secrets (never commit)
+.env
+
 .idea/
 *.swp
 # disposable Chrome profiles for live site probes
@@ -65,3 +69,18 @@ _probe*.png
 
 # raw third-party userscript sources captured for analysis (large; replace with re-fetch)
 docs/superpowers/specs/*.user.js
+
+
+# Tampermonkey extension bundle (re-download from the CRX at dev time; do not commit)
+/tm-extension/
+/tampermonkey.crx
+
+# ad-hoc dev notes / patches
+/_ask.txt
+/.patch-readFromDom.txt
+
+# vision-toolkit scratch artifacts (cropped screenshots etc.)
+.dsh-vision-toolkit/
+
+# analysis screenshots of the running panel
+/final-*.png

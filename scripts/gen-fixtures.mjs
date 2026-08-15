@@ -52,6 +52,17 @@ const current = [
       { kind: "reply",   actor: "alice", content: '<p>在主题《<a href="/topic/101">另一个主题</a>》中回复了你：好的</p>',         url: "/topic/101" },
       { kind: "system",  actor: "system", content: '<p>欢迎加入 linux.sb</p>',                                                url: "/topic/1" },
     ]})],
+  // Notification page with more items than MAX_LIST (8 > 5): the list is
+  // capped but unread must reflect the raw item count.
+  ["notifications-many-new.html",
+    notificationPage({
+      items: Array.from({ length: 8 }, (_, i) => ({
+        kind: i % 2 === 0 ? "mention" : "reply",
+        actor: "user" + (i + 1),
+        content: "<p>第 " + (i + 1) + " 条通知：<a href=\"/topic/" + (100 + i) + "\">主题" + (i + 1) + "</a></p>",
+        url: "/topic/" + (100 + i),
+      })),
+    })],
 ];
 
 for (const [name, body] of [...legacy, ...current]) {
