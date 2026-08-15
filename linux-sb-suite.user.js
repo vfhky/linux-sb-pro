@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.2.1-dev
+// @version      1.2.2-dev
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @author       vfhky
 // @match        https://linux.sb/*
@@ -13,6 +13,7 @@
 // @grant        GM_setValue
 // @grant        GM_deleteValue
 // @grant        GM_addStyle
+// @grant        GM_notification
 // @grant        unsafeWindow
 // @run-at       document-idle
 // @noframes
@@ -63,7 +64,7 @@
 
   // ----- guard: run once per page ---------------------------------------
   if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.2.1-dev" });
+  const LSB = (root.LSB = { __booted: true, version: "1.2.2-dev" });
 
   // =====================================================================
   // core/config
@@ -308,12 +309,7 @@
     "panel.title":         { zh: "面板",     en: "Panel" },
     "panel.settings":      { zh: "设置",     en: "Settings" },
     "panel.close":         { zh: "关闭",     en: "Close" },
-    "panel.pos":           { zh: "位置",     en: "Position" },
     "panel.theme":         { zh: "主题",     en: "Theme" },
-    "panel.pos.BR":        { zh: "右下",     en: "Bottom-right" },
-    "panel.pos.BL":        { zh: "左下",     en: "Bottom-left" },
-    "panel.pos.TR":        { zh: "右上",     en: "Top-right" },
-    "panel.pos.TL":        { zh: "左上",     en: "Top-left" },
     "panel.theme.auto":    { zh: "跟随系统", en: "Follow system" },
     "panel.theme.light":   { zh: "浅色",     en: "Light" },
     "panel.theme.dark":    { zh: "深色",     en: "Dark" },
@@ -331,13 +327,9 @@
   LSB.sections = (typeof createSectionRegistry === "function") ? createSectionRegistry() : null;
 
   if (LSB.settings) {
-    LSB.settings.register({
-      key: "panel.pos", type: "enum", group: "panel",
-      label: { zh: "位置", en: "Position" },
-      default: "BR", options: Object.keys(LSB.config.ui.positions),
-      // The settings popover renders a segmented control from this enum;
-      // picking a corner re-applies the panel via panel:reapply.
-    });
+    // NOTE: panel position is fixed at bottom-right (BR) since 1.2.2 — the
+    // position setting was removed on request. config.ui.positions still
+    // drives the CSS, so re-enabling later is one registration + a constant.
     LSB.settings.register({
       key: "panel.theme", type: "enum", group: "panel",
       label: { zh: "主题", en: "Theme" },
@@ -500,6 +492,8 @@
   // =====================================================================
   LSB.register("user", function ({ config, dom, events }) {
     const log = LSB.logger.make("user");
+    // In-memory LRU for user-page fallback fetches (lib/lru-cache.mjs, inlined).
+    const userPageCache = (typeof createLRUCache === "function") ? createLRUCache(10) : null;
 
     /**
      * Read the current user info from the live DOM.
@@ -531,6 +525,11 @@
      */
     async function readFromUserPage(userId) {
       if (!userId) return null;
+      // LRU hit: avoid refetching the same user page within one page lifetime.
+      if (userPageCache) {
+        const hit = userPageCache.get("user:" + userId);
+        if (hit) return hit;
+      }
       const url = `${config.site.apiBase}/user/${userId}`;
       try {
         const html = await LSB.http.getHtml(url);
@@ -541,7 +540,7 @@
         // first <img> (old behaviour) only when the card is not rendered.
         const img = doc.querySelector(".sidebar-card.user-card .user-avatar-big img.avatar-img")
           || doc.querySelector("img");
-        return {
+        const result = {
           id: userId,
           nickname,
           avatarUrl: dom.src(img) || LSB.api.linuxSb.avatarUrl.dicebearForUserId(userId),
@@ -551,6 +550,8 @@
           source: "user-page",
           raw: { title },
         };
+        if (userPageCache) userPageCache.set("user:" + userId, result);
+        return result;
       } catch (err) {
         log.warn("user page fetch failed", err);
         return null;
@@ -901,25 +902,26 @@
       log.warn("settings registry unavailable; panelStyle no-op");
       return { name: "panelStyle", init() {} };
     }
-    const pos = LSB.settings.get("panel.pos");
     const theme = LSB.settings.get("panel.theme");
+    // Panel position is fixed at bottom-right (1.2.2+): the position setting
+    // was removed on request. config.ui.positions still drives the CSS, so
+    // re-enabling is one registration plus this constant.
+    const POS = "BR";
 
     LSB.panelStyle = {
-      get pos() { return pos.get(); },
+      get pos() { return POS; },
       get theme() { return theme.get(); },
       set(patch) {
-        if (patch && patch.pos != null) pos.set(patch.pos);
         if (patch && patch.theme != null) theme.set(patch.theme);
-        events.emit("panel:reapply", { pos: this.pos, theme: this.theme });
+        events.emit("panel:reapply", { pos: POS, theme: this.theme });
       },
     };
 
-    pos.subscribe((v) => events.emit("panel:reapply", { pos: v, theme: theme.get() }));
-    theme.subscribe((v) => events.emit("panel:reapply", { pos: pos.get(), theme: v }));
+    theme.subscribe((v) => events.emit("panel:reapply", { pos: POS, theme: v }));
 
     return {
       name: "panelStyle",
-      init() { events.emit("panel:reapply", { pos: pos.get(), theme: theme.get() }); },
+      init() { events.emit("panel:reapply", { pos: POS, theme: theme.get() }); },
     };
   }, ["config", "events"]);
 
@@ -1017,6 +1019,68 @@
     return { name: "notif", init: bindUser };
   }, ["config", "http", "events", "user"]);
 
+  // =====================================================================
+  // module: signinTips  (top reminder bar when auto-signin is off)
+  // =====================================================================
+  LSB.register("signinTips", function ({ events, signin, user }) {
+    const log = LSB.logger.make("signinTips");
+    if (typeof createSigninTips !== "function") {
+      log.warn("createSigninTips not inlined; signinTips disabled");
+      return { name: "signinTips", init() {} };
+    }
+    // Tip bar CSS (injected once; independent of the panel theme tokens).
+    GM_addStyle(
+      ".lsb-tip{position:fixed;top:0;left:0;right:0;z-index:2147483645;background:rgba(255,217,0,.92);" +
+      "color:#5b4a00;font:13px/1.6 system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;" +
+      "box-shadow:0 2px 12px rgba(0,0,0,.18);animation:lsb-tip-in .3s ease}" +
+      ".lsb-tip-inner{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 12px;text-align:center}" +
+      ".lsb-tip-text{font-weight:600}.lsb-tip-action{font-weight:800;cursor:pointer;text-decoration:underline;padding:2px 6px;border-radius:6px}" +
+      ".lsb-tip-action:hover{background:rgba(0,0,0,.08)}" +
+      "@keyframes lsb-tip-in{from{transform:translateY(-100%)}to{transform:none}}"
+    );
+    const tips = createSigninTips({ storage: LSB.storage, signin, user, toast: LSB.toast });
+    let visible = false;
+
+    async function refresh() {
+      if (!user || !user.info || !user.info.id) { tips.remove(); visible = false; return; }
+      if (signin.getAutoSignin()) { tips.remove(); visible = false; return; }
+      if (visible) return;
+      visible = await tips.show();
+    }
+
+    events.on("user:changed", refresh);
+    events.on("signin:auto-changed", (on) => { if (on) { tips.remove(); visible = false; } else refresh(); });
+    events.on("signin:status-changed", (s) => { if (s && s.status === "signed-in") { tips.remove(); visible = false; } });
+    return { name: "signinTips", init: refresh };
+  }, ["events", "signin", "user"]);
+
+  // =====================================================================
+  // module: notifier  (milestone notifications: streak / total / points)
+  // =====================================================================
+  LSB.register("notifier", function ({ events, signin, user }) {
+    const log = LSB.logger.make("notifier");
+    if (typeof createNotifier !== "function" || typeof GM_notification !== "function") {
+      log.warn("createNotifier/GM_notification unavailable; notifier disabled");
+      return { name: "notifier", init() {} };
+    }
+    const notifier = createNotifier({
+      storage: LSB.storage,
+      notify: (title, text) => GM_notification({ title, text, timeout: 5000 }),
+    });
+    function onStatus(s) {
+      if (!s || !s.stats) return;
+      notifier.check({
+        streak: s.stats.streak,
+        total: s.stats.total,
+        points: user && user.info ? user.info.points : undefined,
+      });
+    }
+    events.on("signin:auto", onStatus);
+    events.on("signin:status-changed", onStatus);
+    return { name: "notifier", init() {} };
+  }, ["events", "signin", "user"]);
+
+
   LSB.register("ui", function ({ config, dom, events, user, signin, panelStyle }) {
     const log = LSB.logger.make("ui");
     const log_user = LSB.logger.make("ui/user");
@@ -1098,6 +1162,13 @@
         flex-shrink: 0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         object-fit: cover;
+      }
+      #lsb-panel .lsb-site-icon-fallback {
+        display: inline-flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: 11px; letter-spacing: 0.06em;
+        color: #fff;
+        background: linear-gradient(135deg, #5a7de0 0%, #4a6bc9 100%);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
       }
       #lsb-panel .lsb-hdr-text {
         display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
@@ -1237,30 +1308,29 @@
       #lsb-panel .lsb-hero-btn:active { transform: translateY(0) scale(0.98); }
       #lsb-panel .lsb-hero-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; transform: none; }
 
-      /* ================= tabs (LDStatus .ldsp-tabs) ================= */
+      /* ================= tabs (segmented pills) ================= */
       #lsb-panel .lsb-tabs {
-        position: relative; display: flex; gap: 4px;
-        padding: 7px 10px;
-        background: rgba(32, 36, 50, 0.62);
+        display: flex; gap: 6px;
+        padding: 8px 12px;
+        background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95));
         border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
       }
-      #lsb-panel .lsb-tab-indicator {
-        position: absolute; top: 7px; left: 10px; height: calc(100% - 14px);
-        border-radius: 8px; pointer-events: none; z-index: 0;
-        background: rgba(255, 255, 255, 0.12);
-        transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-      }
       #lsb-panel .lsb-tab {
-        position: relative; z-index: 1;
-        flex: 1; padding: 7px 10px;
+        flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 7px 12px;
         border: none; background: transparent;
         color: var(--lsb-fg-sec, #9499ad);
         font: inherit; font-size: 12px; font-weight: 600;
-        border-radius: 8px; cursor: pointer;
-        transition: color 0.2s;
+        border-radius: 999px; cursor: pointer;
+        transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
       }
-      #lsb-panel .lsb-tab:hover { color: var(--lsb-fg, #e4e6ed); }
-      #lsb-panel .lsb-tab.active { color: #fff; }
+      #lsb-panel .lsb-tab .lsb-tab-ic { display: inline-flex; flex: none; }
+      #lsb-panel .lsb-tab:hover { color: var(--lsb-fg, #e4e6ed); background: rgba(255, 255, 255, 0.06); }
+      #lsb-panel .lsb-tab.active {
+        color: #fff;
+        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
+        box-shadow: 0 2px 10px rgba(107, 140, 239, 0.35);
+      }
 
       /* ================= content panes ================= */
       #lsb-panel .lsb-pane { display: none; }
@@ -1403,7 +1473,7 @@
     root.dataset.theme = LSB.panelStyle ? LSB.panelStyle.theme : "auto";
         root.innerHTML = `
       <div class="lsb-hdr lsb-compact" data-lsb="compact">
-        <img class="lsb-site-icon" src="https://linux.sb/app/assets/index.svg" alt="linux.sb" />
+        <img class="lsb-site-icon" src="https://linux.sb/app/assets/index.svg" alt="linux.sb" data-lsb="site-icon" />
         <div class="lsb-hdr-text">
           <span class="lsb-title">linux.sb 助手</span>
           <span class="lsb-ver">v<span data-lsb="version">0.0.0</span></span>
@@ -1430,9 +1500,14 @@
           </div>
         </div>
         <div class="lsb-tabs" data-lsb="tabs">
-          <div class="lsb-tab-indicator"></div>
-          <button type="button" class="lsb-tab active" data-lsb-tab="notif">${LSB.i18n.t("notif.title")}</button>
-          <button type="button" class="lsb-tab" data-lsb-tab="settings">${LSB.i18n.t("panel.settings")}</button>
+          <button type="button" class="lsb-tab active" data-lsb-tab="notif">
+            <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+            ${LSB.i18n.t("notif.title")}
+          </button>
+          <button type="button" class="lsb-tab" data-lsb-tab="settings">
+            <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
+            ${LSB.i18n.t("panel.settings")}
+          </button>
         </div>
         <div class="lsb-content">
           <div class="lsb-pane active" data-lsb-pane="notif">
@@ -1459,6 +1534,21 @@
     // demand because it is re-created on re-render.
     const refs = (typeof collectRefs === "function") ? collectRefs(root) : {};
     const $ = (key) => refs[key] || root.querySelector(`[data-lsb="${key}"]`);
+    // Header site icon: if the SVG fails to load (404 / blocked / offline),
+    // swap in a letter badge so the top bar never shows a broken image.
+    const siteIcon = $("site-icon");
+    const siteIconBadge = () => {
+      if (!siteIcon || siteIcon.dataset.fallbackApplied) return;
+      siteIcon.dataset.fallbackApplied = "1";
+      const badge = document.createElement("span");
+      badge.className = "lsb-site-icon lsb-site-icon-fallback";
+      badge.textContent = "SB";
+      siteIcon.replaceWith(badge);
+    };
+    if (siteIcon) {
+      if (siteIcon.complete && siteIcon.naturalWidth === 0) siteIconBadge();
+      else siteIcon.addEventListener("error", siteIconBadge, { once: true });
+    }
     const dot = $("dot");
     const nameEl = $("name");
     const avatarEl = $("avatar");
@@ -1630,18 +1720,9 @@
       renderSettings();
     });
     // Tab switching (LDStatus .ldsp-tabs with a sliding indicator).
-    function updateTabIndicator() {
-      const container = root.querySelector(".lsb-tabs");
-      const indicator = root.querySelector(".lsb-tab-indicator");
-      const active = container ? container.querySelector(".lsb-tab.active") : null;
-      if (!container || !indicator || !active) return;
-      indicator.style.width = Math.round(active.offsetWidth) + "px";
-      indicator.style.transform = `translateX(${active.offsetLeft}px)`;
-    }
     function activateTab(name) {
       root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === name));
       root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.toggle("active", p.dataset.lsbPane === name));
-      updateTabIndicator();
     }
     root.querySelectorAll(".lsb-tab").forEach((t) => {
       t.addEventListener("click", () => activateTab(t.dataset.lsbTab));

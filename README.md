@@ -18,12 +18,15 @@ After install, Tampermonkey auto-updates the script from Greasy Fork using the s
 - **One-click sign-in**: expand the pill and tap `立即签到` if you have not signed in today.
 - **Auto sign-in**: a switch in the expanded panel enables automatic check-in on every page load. Persisted via the settings registry (`GM_*`), no per-session confirmation.
 - **Unread notifications**: a red dot on the pill shows the raw unread count; expanding the panel shows the 5 most recent items. Polled every 60 s while the tab is visible, paused when the tab is hidden; falls back to 5 min polling after 3 consecutive errors.
-- **Panel position & theme**: the gear inside the panel opens a settings tab — pick one of the four corners and a light / dark / system-following palette. Choices persist via `GM_setValue`; new themes and positions are config-only edits.
+- **Panel theme**: the gear inside the panel opens a settings tab — pick a light / dark / system-following palette. Choices persist via `GM_setValue`; new themes are config-only edits. The panel position is fixed at the bottom-right corner.
+- **Missed-check-in reminder bar**: when auto sign-in is off and you have not signed in today, a dismissible yellow bar appears at the top of the page (`立即签到` / `今天不提示`, date-level dedupe).
+- **Milestone notifications**: one-shot desktop notifications (`GM_notification`) when your check-in streak / total days / points cross milestones (e.g. 7-day streak, 100 points).
 - **Multi-tab coordination**: only one tab polls (leader election via `localStorage` heartbeat), so N open tabs do not duplicate notification or auto-signin requests.
 - **Self-update**: Tampermonkey polls Greasy Fork's meta endpoint on its own schedule. New versions land with one click.
 
 ### Changelog
 
+- **1.2.2** (2026-08-15): segmented pill tab redesign with icons; header icon fallback (never a broken image); fixed panel position (bottom-right); borrowed features — signinTips reminder bar, LRUCache, milestone notifier, relative-time formatter.
 - **1.2.0** (2026-08-15): multi-tab leader election; LDStatus-grade panel redesign; node reference table; diff-style notification rendering; signin IO layer wired.
 - **1.1.6** (2026-08-14): avatar-scope fix — read the avatar only from the sidebar user-card, not the first `<img>` on the page.
 - **1.1.5** (2026-08-13): always show the logged-in user (two-page safety on `/user/<id>`); parse `/daily_checkin` through the unit-tested lib.
