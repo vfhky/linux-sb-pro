@@ -1175,7 +1175,12 @@
     `;
     document.documentElement.appendChild(root);
 
-    const $ = (key) => root.querySelector(`[data-lsb="${key}"]`);
+    // Node reference table: collect the static skeleton's [data-lsb] nodes
+    // once (inlined from lib/dom-refs.mjs) instead of re-querying per access.
+    // Dynamic content (sections host, notif list, toast) is still queried on
+    // demand because it is re-created on re-render.
+    const refs = (typeof collectRefs === "function") ? collectRefs(root) : {};
+    const $ = (key) => refs[key] || root.querySelector(`[data-lsb="${key}"]`);
     const dot = $("dot");
     const nameEl = $("name");
     const avatarEl = $("avatar");
@@ -1231,8 +1236,21 @@
     // Render the notification badge on the compact row, and populate
     // the notif list inside the section (re-queried because the
     // section was just re-rendered by rerenderSections()).
+    // Diff-style (inlined from lib/notif-view.mjs): when nothing visible
+    // changed, the 60s poll tick becomes a no-op so the panel never flashes.
+    let _notifViewPrev = null;
     function renderNotif(payload) {
-      const { unread, list } = payload || { unread: 0, list: [] };
+      let diff;
+      if (typeof notifViewDiff === "function") {
+        diff = notifViewDiff(_notifViewPrev, payload);
+      } else {
+        // Fallback (lib not inlined): always render, like the old code.
+        const u = (payload || {}).unread || 0;
+        diff = { unread: u, dotText: u > 9 ? "9+" : (u > 0 ? String(u) : ""), dotHidden: u === 0, listChanged: true, list: (payload || {}).list || [] };
+      }
+      _notifViewPrev = payload || { unread: 0, list: [] };
+      if (!diff) return;
+
       let notifDot = root.querySelector(".lsb-notif-dot");
       if (!notifDot) {
         notifDot = document.createElement("span");
@@ -1240,13 +1258,14 @@
         const compact = root.querySelector(".lsb-compact");
         if (compact) compact.insertBefore(notifDot, compact.querySelector(".lsb-chevron"));
       }
-      notifDot.textContent = unread > 9 ? "9+" : (unread > 0 ? String(unread) : "");
-      notifDot.hidden = unread === 0;
+      notifDot.textContent = diff.dotText;
+      notifDot.hidden = diff.dotHidden;
       const listEl = root.querySelector('[data-lsb="notif-list"]');
       const countEl = root.querySelector('[data-lsb="notif-count"]');
-      if (countEl) countEl.textContent = String(unread);
-      if (listEl) {
+      if (countEl && countEl.textContent !== String(diff.unread)) countEl.textContent = String(diff.unread);
+      if (listEl && diff.listChanged) {
         listEl.innerHTML = "";
+        const list = diff.list;
         if (!list.length) {
           const li = document.createElement("li");
           li.className = "lsb-empty";

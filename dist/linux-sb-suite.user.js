@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.1.7
+// @version      1.1.8
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @downloadURL https://update.greasyfork.org/scripts/590905.user.js
 // @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
@@ -22,7 +22,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-15T02:23:13.913Z
+ * built: 2026-08-15T02:53:24.607Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -439,6 +439,25 @@ function parseCheckinPage(html) {
 }
 
 ;
+// Build a { key -> element } reference table for a container's [data-*]
+// nodes. The UI module collects its static skeleton once (instead of
+// re-querying per access); dynamic content (sections, notif list, toast)
+// is still queried on demand.
+//
+// Pure: takes any node with querySelectorAll, returns a plain object.
+// Duplicate keys: first occurrence wins (the template only has unique
+// keys; this guards against accidental re-registration).
+function collectRefs(root, attr = "data-lsb") {
+  const refs = {};
+  if (!root || typeof root.querySelectorAll !== "function") return refs;
+  root.querySelectorAll("[" + attr + "]").forEach((el) => {
+    const key = el.getAttribute(attr);
+    if (key && !(key in refs)) refs[key] = el;
+  });
+  return refs;
+}
+
+;
 // Parse a linux.sb notifications page into { unread, list }.
 // Pure: takes HTML text, returns a plain object.  MAX_LIST caps the
 // returned list size; unread is reported as the raw count even when
@@ -625,6 +644,41 @@ async function probeEndpoint(http, apiBase, candidates) {
     if (isNotifPage(html || "")) return url;
   }
   return null;
+}
+
+;
+// Diff-style rendering for the notification badge/list.
+// Pure: given the previous and next notification state, returns a patch
+// describing ONLY what visibly changed, or null when nothing changed so
+// the caller can skip DOM writes entirely (keeps the 60s poll from
+// flashing the panel when data is unchanged).
+function notifViewDiff(prev, next) {
+  const nextState = next || { unread: 0, list: [] };
+  const unread = Number(nextState.unread) || 0;
+  const list = Array.isArray(nextState.list) ? nextState.list : [];
+  const prevUnread = prev ? Number(prev.unread) || 0 : null;
+  // Symmetric with the next-side list handling: malformed / missing lists
+  // are treated as empty on BOTH sides, so an identical malformed payload
+  // yields no patch.
+  const prevList = prev && Array.isArray(prev.list) ? prev.list : [];
+
+  const listKey = (items) => items.map((i) => (i ? i.url + "|" + i.title : "")).join("\u0001");
+  const nextKey = listKey(list);
+  const prevKey = prevList ? listKey(prevList) : null;
+
+  const countChanged = prevUnread !== unread;
+  const listChanged = prevKey !== nextKey;
+  // First render (prev === null) must always produce a patch.
+  if (!countChanged && !listChanged) return null;
+
+  return {
+    unread,
+    countChanged,
+    listChanged,
+    list,
+    dotText: unread > 9 ? "9+" : (unread > 0 ? String(unread) : ""),
+    dotHidden: unread === 0,
+  };
 }
 
 ;
@@ -878,7 +932,7 @@ function _userIdFromHref(href) {
   return m ? Number(m[1]) : null;
 }
 ;if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.1.7" });
+  const LSB = (root.LSB = { __booted: true, version: "1.1.8" });
 
   // =====================================================================
   // core/config
@@ -1990,7 +2044,12 @@ function _userIdFromHref(href) {
     `;
     document.documentElement.appendChild(root);
 
-    const $ = (key) => root.querySelector(`[data-lsb="${key}"]`);
+    // Node reference table: collect the static skeleton's [data-lsb] nodes
+    // once (inlined from lib/dom-refs.mjs) instead of re-querying per access.
+    // Dynamic content (sections host, notif list, toast) is still queried on
+    // demand because it is re-created on re-render.
+    const refs = (typeof collectRefs === "function") ? collectRefs(root) : {};
+    const $ = (key) => refs[key] || root.querySelector(`[data-lsb="${key}"]`);
     const dot = $("dot");
     const nameEl = $("name");
     const avatarEl = $("avatar");
@@ -2046,8 +2105,21 @@ function _userIdFromHref(href) {
     // Render the notification badge on the compact row, and populate
     // the notif list inside the section (re-queried because the
     // section was just re-rendered by rerenderSections()).
+    // Diff-style (inlined from lib/notif-view.mjs): when nothing visible
+    // changed, the 60s poll tick becomes a no-op so the panel never flashes.
+    let _notifViewPrev = null;
     function renderNotif(payload) {
-      const { unread, list } = payload || { unread: 0, list: [] };
+      let diff;
+      if (typeof notifViewDiff === "function") {
+        diff = notifViewDiff(_notifViewPrev, payload);
+      } else {
+        // Fallback (lib not inlined): always render, like the old code.
+        const u = (payload || {}).unread || 0;
+        diff = { unread: u, dotText: u > 9 ? "9+" : (u > 0 ? String(u) : ""), dotHidden: u === 0, listChanged: true, list: (payload || {}).list || [] };
+      }
+      _notifViewPrev = payload || { unread: 0, list: [] };
+      if (!diff) return;
+
       let notifDot = root.querySelector(".lsb-notif-dot");
       if (!notifDot) {
         notifDot = document.createElement("span");
@@ -2055,13 +2127,14 @@ function _userIdFromHref(href) {
         const compact = root.querySelector(".lsb-compact");
         if (compact) compact.insertBefore(notifDot, compact.querySelector(".lsb-chevron"));
       }
-      notifDot.textContent = unread > 9 ? "9+" : (unread > 0 ? String(unread) : "");
-      notifDot.hidden = unread === 0;
+      notifDot.textContent = diff.dotText;
+      notifDot.hidden = diff.dotHidden;
       const listEl = root.querySelector('[data-lsb="notif-list"]');
       const countEl = root.querySelector('[data-lsb="notif-count"]');
-      if (countEl) countEl.textContent = String(unread);
-      if (listEl) {
+      if (countEl && countEl.textContent !== String(diff.unread)) countEl.textContent = String(diff.unread);
+      if (listEl && diff.listChanged) {
         listEl.innerHTML = "";
+        const list = diff.list;
         if (!list.length) {
           const li = document.createElement("li");
           li.className = "lsb-empty";

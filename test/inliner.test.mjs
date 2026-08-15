@@ -12,6 +12,8 @@ export default async function run() {
   assert.ok(files.some((f) => f.endsWith("notif-probe.mjs")));
   assert.ok(files.some((f) => f.endsWith("notif-parse.mjs")));
   assert.ok(files.some((f) => f.endsWith("panel-style-store.mjs")));
+  assert.ok(files.some((f) => f.endsWith("dom-refs.mjs")));
+  assert.ok(files.some((f) => f.endsWith("notif-view.mjs")));
   // test-only fixture builder must never ship in the public bundle
   assert.ok(!files.some((f) => f.endsWith("build-fixture.mjs")));
 
