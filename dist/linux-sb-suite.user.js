@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-15T16:31:52.181Z
+ * built: 2026-08-15T16:50:49.136Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -84,16 +84,26 @@ const PALETTE_TOKENS = [
   ["bg", "--lsb-bg"],
   ["bgCard", "--lsb-bg-card"],
   ["bgHover", "--lsb-bg-hover"],
+  ["bgEl", "--lsb-bg-el"],
   ["fg", "--lsb-fg"],
   ["fgSec", "--lsb-fg-sec"],
   ["fgMut", "--lsb-fg-mut"],
   ["accent", "--lsb-accent"],
   ["accentLight", "--lsb-accent-light"],
+  ["accent2", "--lsb-accent2"],
+  ["accent2Light", "--lsb-accent2-light"],
+  ["accent3", "--lsb-accent3"],
   ["ok", "--lsb-ok"],
+  ["okLight", "--lsb-ok-light"],
+  ["okBg", "--lsb-ok-bg"],
   ["warn", "--lsb-warn"],
+  ["warnBg", "--lsb-warn-bg"],
   ["danger", "--lsb-danger"],
+  ["errLight", "--lsb-err-light"],
+  ["errBg", "--lsb-err-bg"],
   ["border", "--lsb-border"],
   ["borderStrong", "--lsb-border-strong"],
+  ["borderAccent", "--lsb-border-accent"],
   ["scrollbar", "--lsb-scrollbar"],
   ["scrollbarHover", "--lsb-scrollbar-hover"],
   ["shadow", "--lsb-shadow"],
@@ -183,43 +193,73 @@ function createI18n({ locale = "en", fallback = "en" } = {}) {
 }
 
 ;
-// Theme palettes (design tokens) — color values taken from LDStatus Pro's
-// verified token set (#ldsp-panel in ldstatuspro.user.js) so the panel
-// shares its refined dark/light look.
+// Theme palettes (design tokens) — the FULL verified LDStatus Pro token set
+// (#ldsp-panel / #ldsp-panel.light in ldstatuspro.user.js) so the panel
+// shares its exact dark/light color design.
 const PALETTES = {
   light: {
+    // surfaces
     bg: "rgba(250,251,254,0.97)",
     bgCard: "rgba(245,247,252,0.94)",
     bgHover: "rgba(238,242,250,0.96)",
+    bgEl: "rgba(255,255,255,0.94)",
+    // text
     fg: "#1e2030",
     fgSec: "#4a5068",
     fgMut: "#8590a6",
+    // accents
     accent: "#5070d0",
     accentLight: "#6b8cef",
+    accent2: "#4a9e8f",
+    accent2Light: "#5bb5a6",
+    accent3: "#d45d6e",
+    // status
     ok: "#4a9e8f",
+    okLight: "#5bb5a6",
+    okBg: "rgba(74,158,143,0.08)",
     warn: "#c49339",
+    warnBg: "rgba(196,147,57,0.08)",
     danger: "#d45d6e",
+    errLight: "#e07a8d",
+    errBg: "rgba(212,93,110,0.08)",
+    // borders
     border: "rgba(0,0,0,0.08)",
-    borderStrong: "rgba(0,0,0,0.12)",
+    borderStrong: "rgba(0,0,0,0.1)",
+    borderAccent: "rgba(80,112,208,0.2)",
     scrollbar: "rgba(15,23,42,0.18)",
     scrollbarHover: "rgba(15,23,42,0.34)",
     shadow: "0 20px 48px rgba(30,41,80,0.16)",
     glow: "0 0 0 1px rgba(80,112,208,0.22), 0 20px 48px rgba(30,41,80,0.18)",
   },
   dark: {
+    // surfaces
     bg: "#12131a",
     bgCard: "rgba(24,26,36,0.92)",
     bgHover: "rgba(38,42,56,0.95)",
+    bgEl: "rgba(32,35,48,0.88)",
+    // text
     fg: "#e4e6ed",
     fgSec: "#9499ad",
     fgMut: "#5d6275",
+    // accents
     accent: "#6b8cef",
     accentLight: "#8aa4f4",
+    accent2: "#5bb5a6",
+    accent2Light: "#7cc9bc",
+    accent3: "#e07a8d",
+    // status
     ok: "#5bb5a6",
+    okLight: "#7cc9bc",
+    okBg: "rgba(91,181,166,0.12)",
     warn: "#d4a853",
+    warnBg: "rgba(212,168,83,0.12)",
     danger: "#e07a8d",
+    errLight: "#ea9aa8",
+    errBg: "rgba(224,122,141,0.12)",
+    // borders
     border: "rgba(255,255,255,0.06)",
     borderStrong: "rgba(255,255,255,0.1)",
+    borderAccent: "rgba(107,140,239,0.3)",
     scrollbar: "rgba(140,150,175,0.5)",
     scrollbarHover: "rgba(140,150,175,0.7)",
     shadow: "0 20px 48px rgba(0,0,0,0.4)",
@@ -2659,11 +2699,11 @@ function _userIdFromHref(href) {
         position: relative;
         min-width: 18px; height: 18px; padding: 0 5px;
         border-radius: 9999px;
-        background: linear-gradient(135deg, #ff5f6d, #e64545);
+        background: linear-gradient(135deg, var(--lsb-err-light, #ea9aa8), var(--lsb-danger, #e07a8d));
         color: #fff;
         font-size: 10px; line-height: 18px; font-weight: 700;
         text-align: center;
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), 0 2px 12px rgba(230, 69, 69, 0.7);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), 0 2px 12px rgba(224, 122, 141, 0.7);
       }
       #lsb-panel .lsb-notif-dot[hidden] { display: none !important; }
       #lsb-panel [hidden] { display: none !important; }
@@ -2758,8 +2798,8 @@ function _userIdFromHref(href) {
         display: inline-flex; align-items: center; gap: 5px;
         font-size: 12px; font-weight: 700; color: var(--lsb-ok, #5bb5a6);
         padding: 7px 16px; border-radius: 999px;
-        background: rgba(91, 181, 166, 0.12);
-        border: 1px solid rgba(91, 181, 166, 0.35);
+        background: var(--lsb-ok-bg, rgba(91, 181, 166, 0.12));
+        border: 1px solid var(--lsb-ok, #5bb5a6);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 10px rgba(91, 181, 166, 0.12);
       }
       #lsb-panel .lsb-hero-btn {
@@ -2767,7 +2807,7 @@ function _userIdFromHref(href) {
         font: inherit; font-size: 12px; font-weight: 700;
         padding: 8px 20px; border-radius: 999px;
         color: #fff;
-        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
+        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), var(--lsb-accent-light, #8aa4f4));
         box-shadow: 0 4px 14px rgba(107, 140, 239, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
         transition: filter 0.18s ease, box-shadow 0.18s ease, transform 0.18s var(--ease);
       }
@@ -2964,7 +3004,7 @@ function _userIdFromHref(href) {
       }
       #lsb-panel .lsb-seg:hover span { color: var(--lsb-fg, #e4e6ed); border-color: var(--lsb-accent, #6b8cef); }
       #lsb-panel .lsb-seg.active span {
-        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
+        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), var(--lsb-accent-light, #8aa4f4));
         color: #fff; border-color: transparent;
         box-shadow: 0 2px 10px rgba(107, 140, 239, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
       }
@@ -3016,12 +3056,12 @@ function _userIdFromHref(href) {
 
     // Toast CSS (injected once, follows panel theme via CSS variables)
     GM_addStyle('\x23lsb-toast-container{position:fixed;bottom:12px;right:12px;z-index:2147483647;display:flex;flex-direction:column-reverse;gap:10px;pointer-events:none}' +
-      '.lsb-toast{pointer-events:auto;max-width:320px;padding:11px 15px;border-radius:12px;font:13px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--lsb-fg,#e8eaf2);background:var(--lsb-bg,rgba(17,19,28,0.88));border:1px solid var(--lsb-border,rgba(255,255,255,0.09));box-shadow:var(--lsb-shadow,0 10px 30px rgba(0,0,0,0.4));backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);display:flex;align-items:center;gap:9px;animation:lsb-toast-in .28s cubic-bezier(.22,1,.36,1);transition:opacity .2s,transform .2s}' +
+      '.lsb-toast{pointer-events:auto;max-width:320px;padding:11px 15px;border-radius:12px;font:13px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--lsb-fg,#e4e6ed);background:var(--lsb-bg-card,rgba(24,26,36,0.92));border:1px solid var(--lsb-border,rgba(255,255,255,0.06));box-shadow:var(--lsb-shadow,0 20px 48px rgba(0,0,0,0.4));backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);display:flex;align-items:center;gap:9px;animation:lsb-toast-in .28s cubic-bezier(.22,1,.36,1);transition:opacity .2s,transform .2s}' +
       '.lsb-toast.lsb-toast-out{opacity:0;transform:translateX(24px)}' +
       '@keyframes lsb-toast-in{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}' +
-      '.lsb-toast[data-type=success]{border-left:3px solid #34d399}' +
-      '.lsb-toast[data-type=error]{border-left:3px solid #f87171}' +
-      '.lsb-toast[data-type=info]{border-left:3px solid #6b8cff}' +
+      '.lsb-toast[data-type=success]{border-left:3px solid var(--lsb-ok,#5bb5a6)}' +
+      '.lsb-toast[data-type=error]{border-left:3px solid var(--lsb-danger,#e07a8d)}' +
+      '.lsb-toast[data-type=info]{border-left:3px solid var(--lsb-accent,#6b8cef)}' +
       '.lsb-toast-icon{flex:none;font-size:14px}' +
       '.lsb-toast-msg{flex:1;min-width:0}');
 
