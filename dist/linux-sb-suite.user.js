@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-15T15:20:58.322Z
+ * built: 2026-08-15T15:32:56.002Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -2565,6 +2565,11 @@ function _userIdFromHref(href) {
         background: rgba(255, 255, 255, 0.25);
         transform: translateY(-2px) scale(1.05);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+      /* Force the icon SVGs to their intended size — this site's layout
+         otherwise collapses the intrinsic width (renders as a sliver). */
+      #lsb-panel .lsb-hdr-btn svg {
+        width: 17px; height: 17px; flex: none;
       }
       #lsb-panel .lsb-hdr-btn:active { transform: translateY(0) scale(0.95); }
       #lsb-panel .lsb-notif-dot {

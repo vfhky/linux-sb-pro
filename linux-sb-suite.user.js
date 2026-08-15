@@ -1294,6 +1294,11 @@
         transform: translateY(-2px) scale(1.05);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
+      /* Force the icon SVGs to their intended size — this site's layout
+         otherwise collapses the intrinsic width (renders as a sliver). */
+      #lsb-panel .lsb-hdr-btn svg {
+        width: 17px; height: 17px; flex: none;
+      }
       #lsb-panel .lsb-hdr-btn:active { transform: translateY(0) scale(0.95); }
       #lsb-panel .lsb-notif-dot {
         position: relative;
