@@ -1474,6 +1474,19 @@
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
         font-size: 9px; color: var(--lsb-fg-sec, #9499ad); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
       }
+
+      /* demo-style progress ring inside the stats card (LDStatus .ldsp-ring) */
+      #lsb-panel .lsb-stats-ring { position: relative; width: 46px; height: 46px; margin-bottom: 2px; }
+      #lsb-panel .lsb-stats-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; overflow: visible; }
+      #lsb-panel .lsb-ring-bg { stroke: var(--lsb-bg-el, rgba(32, 35, 48, 0.88)); }
+      #lsb-panel .lsb-ring-fill { stroke: url(#lsb-ring-grad); transition: stroke-dashoffset 1s cubic-bezier(0.22, 1, 0.36, 1); }
+      #lsb-panel .lsb-stats-ring .lsb-stats-num {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 12px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+      }
+      /* light theme: ring bg adapts */
+      #lsb-panel[data-theme="light"] .lsb-ring-bg { stroke: rgba(0, 0, 0, 0.08); }
+
       #lsb-panel .lsb-hero-signed {
         display: inline-flex; align-items: center; gap: 5px;
         font-size: 12px; font-weight: 700; color: var(--lsb-ok, #5bb5a6);
@@ -1631,8 +1644,17 @@
       #lsb-panel .lsb-settings-nav-main { display: flex; align-items: center; gap: 8px; font-weight: 600; min-width: 0; }
       #lsb-panel .lsb-settings-nav-value { font-size: 10px; color: var(--lsb-fg-mut, #5d6275); }
       #lsb-panel .lsb-settings-nav-arrow { font-size: 13px; color: var(--lsb-fg-mut, #5d6275); }
-      #lsb-panel .lsb-settings-sub { display: none; padding: 2px 2px 6px; }
-      #lsb-panel .lsb-settings-sub.show { display: block; animation: lsb-enter 0.18s var(--ease-out); }
+      #lsb-panel .lsb-settings-view { display: none; padding: 2px; }
+      #lsb-panel .lsb-settings-view.active { display: block; animation: lsb-enter 0.18s var(--ease-out); }
+      #lsb-panel .lsb-settings-back {
+        width: 24px; height: 24px; border: none; border-radius: 7px;
+        background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
+        color: var(--lsb-fg-sec, #9499ad); font-size: 14px;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; flex-shrink: 0;
+        transition: background 0.15s, color 0.15s, transform 0.15s;
+      }
+      #lsb-panel .lsb-settings-back:hover { background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95)); color: var(--lsb-fg, #e4e6ed); transform: translateX(-1px); }
       #lsb-panel .lsb-settings-toggle {
         display: flex; align-items: center; justify-content: space-between; gap: 10px;
         padding: 9px 10px; margin-top: 6px; border-radius: 10px;
@@ -1769,29 +1791,36 @@
         <div class="lsb-hdr-btns">
           <button type="button" class="lsb-hdr-btn" data-lsb="refresh" title="刷新"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
           <button type="button" class="lsb-hdr-btn" data-lsb="gear" title="${LSB.i18n.t("panel.settings")}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          <button type="button" class="lsb-hdr-btn" data-lsb="update" title="检查更新"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
         </div>
         <span class="lsb-chevron"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
       <div class="lsb-settings-menu" aria-hidden="true">
-        <div class="lsb-settings-head">
-          <span class="lsb-settings-head-title">${LSB.i18n.t("panel.settings")}</span>
+        <div class="lsb-settings-view active" data-settings-view="root">
+          <div class="lsb-settings-head">
+            <span class="lsb-settings-head-title">${LSB.i18n.t("panel.settings")}</span>
+          </div>
+          <div class="lsb-settings-body">
+            <button type="button" class="lsb-settings-nav" data-settings-open="theme">
+              <span class="lsb-settings-nav-main">🎨 ${LSB.i18n.t("panel.theme")}</span>
+              <span class="lsb-settings-nav-value" data-lsb="theme-value">--</span>
+              <span class="lsb-settings-nav-arrow">›</span>
+            </button>
+            <div class="lsb-settings-toggle">
+              <span class="lsb-settings-toggle-main">⚡ ${LSB.i18n.t("signin.auto")}</span>
+              <label class="lsb-switch">
+                <input type="checkbox" data-lsb="auto" />
+                <span class="lsb-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
-        <div class="lsb-settings-body">
-          <div class="lsb-settings-nav" data-settings-nav="theme">
-            <span class="lsb-settings-nav-main">🎨 ${LSB.i18n.t("panel.theme")}</span>
-            <span class="lsb-settings-nav-value" data-lsb="theme-value">--</span>
-            <span class="lsb-settings-nav-arrow">›</span>
+        <div class="lsb-settings-view" data-settings-view="theme">
+          <div class="lsb-settings-head">
+            <button type="button" class="lsb-settings-back" data-settings-back="root" aria-label="返回">‹</button>
+            <span class="lsb-settings-head-title">🎨 ${LSB.i18n.t("panel.theme")}</span>
           </div>
-          <div class="lsb-settings-sub" data-settings-sub="theme">
-            <div class="lsb-settings" data-lsb="settings"></div>
-          </div>
-          <div class="lsb-settings-toggle">
-            <span class="lsb-settings-toggle-main">⚡ ${LSB.i18n.t("signin.auto")}</span>
-            <label class="lsb-switch">
-              <input type="checkbox" data-lsb="auto" />
-              <span class="lsb-slider"></span>
-            </label>
-          </div>
+          <div class="lsb-settings" data-lsb="settings"></div>
         </div>
       </div>
       <div class="lsb-details">
@@ -1810,20 +1839,26 @@
             </div>
           </div>
           <div class="lsb-stats" data-lsb="stats">
-            <span class="lsb-stats-icon">📅</span>
-            <span class="lsb-stats-num" data-lsb="stats-streak">--</span>
+            <div class="lsb-stats-ring" data-lsb="stats-ring">
+              <svg viewBox="0 0 42 42" width="42" height="42">
+                <defs><linearGradient id="lsb-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#5070d0"/><stop offset="100%" stop-color="#5bb5a6"/></linearGradient></defs>
+                <circle class="lsb-ring-bg" cx="21" cy="21" r="16.5" fill="none" stroke-width="4.5"/>
+                <circle class="lsb-ring-fill" data-lsb="ring-fill" cx="21" cy="21" r="16.5" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="103.67" stroke-dashoffset="103.67"/>
+              </svg>
+              <span class="lsb-stats-num" data-lsb="stats-streak">--</span>
+            </div>
             <span class="lsb-stats-label">连续签到</span>
           </div>
         </div>
         <div class="lsb-tabs" data-lsb="tabs">
           <div class="lsb-tab-indicator"><div class="lsb-tab-indicator-glass"></div><div class="lsb-tab-indicator-shine"></div></div>
           <button type="button" class="lsb-tab active" data-lsb-tab="notif">
-            <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-            ${LSB.i18n.t("notif.title")}
+            <span class="lsb-tab-ic">🔔</span>
+            <span class="lsb-tab-text">${LSB.i18n.t("notif.title")}</span>
           </button>
           <button type="button" class="lsb-tab" data-lsb-tab="history">
-            <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-            ${LSB.i18n.t("history.title")}
+            <span class="lsb-tab-ic">🕘</span>
+            <span class="lsb-tab-text">${LSB.i18n.t("history.title")}</span>
           </button>
         </div>
         <div class="lsb-content">
@@ -2033,12 +2068,24 @@
       renderSettings();
       root.classList.toggle("settings-open");
     });
-    // LDStatus-style dropdown: the theme nav row toggles its sub-view.
-    const themeNav = root.querySelector('[data-settings-nav="theme"]');
-    if (themeNav) themeNav.addEventListener("click", () => {
-      const sub = root.querySelector('[data-settings-sub="theme"]');
-      if (sub) sub.classList.toggle("show");
-    });
+    // LDStatus-style dropdown: multi-view navigation (root → sub-views).
+    // Any [data-settings-open] row switches to its view; [data-settings-back]
+    // returns to root. The settings host (theme segments) lives in the theme view.
+    function setSettingsView(name) {
+      root.querySelectorAll('.lsb-settings-view').forEach((v) => {
+        v.classList.toggle('active', v.dataset.settingsView === name);
+      });
+    }
+    const settingsMenu = root.querySelector('.lsb-settings-menu');
+    if (settingsMenu) {
+      settingsMenu.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const back = ev.target.closest('[data-settings-back]');
+        if (back) { setSettingsView(back.dataset.settingsBack || "root"); return; }
+        const open = ev.target.closest('[data-settings-open]');
+        if (open) { renderSettings(); setSettingsView(open.dataset.settingsOpen || "root"); return; }
+      });
+    }
     // Tab switching (LDStatus .ldsp-tabs with a sliding indicator).
     function updateTabIndicator() {
       const container = root.querySelector(".lsb-tabs");
@@ -2092,6 +2139,15 @@
     if (refreshBtn) refreshBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       refresh().catch((e) => log_user.warn(e));
+    });
+    // Header update button: re-fetch data and toast the current version.
+    const updateBtn = $("update");
+    if (updateBtn) updateBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      refresh().catch((e) => log_user.warn(e));
+      if (LSB.toast && typeof LSB.toast.show === "function") {
+        LSB.toast.show("当前版本 v" + LSB.version, { type: "info", durationMs: 3000 });
+      }
     });
 
     // Scrollbar auto-hide (LDStatus-style): any scroll inside the panel
@@ -2191,7 +2247,16 @@
         const isPending = s.status === "not-signed-in";
         // Stats card (LDStatus .ldsp-reading slot): check-in streak.
         const streakEl = $("stats-streak");
-        if (streakEl) streakEl.textContent = (s.stats && s.stats.streak) ? String(s.stats.streak) : "--";
+        const streak = (s.stats && s.stats.streak) ? Number(s.stats.streak) : 0;
+        if (streakEl) streakEl.textContent = streak ? String(streak) : "--";
+        // Drive the progress ring: streak toward a 30-day goal (LDStatus .ldsp-ring-fill).
+        const ringFill = $("ring-fill");
+        if (ringFill) {
+          const circ = 103.67; // 2πr, r=16.5
+          const pct = Math.max(0, Math.min(100, streak / 30 * 100));
+          const off = circ * (1 - pct / 100);
+          requestAnimationFrame(() => { ringFill.style.strokeDashoffset = String(off); });
+        }
         // Sign-in hero in the user card.
         if (signinText) signinText.hidden = !isSigned;
         signinBtn.hidden = !isPending;
