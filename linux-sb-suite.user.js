@@ -1204,13 +1204,16 @@
         font: 13px/1.55 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
         color: var(--lsb-fg, #e4e6ed);
-        background: var(--lsb-bg, #12131a);
-        border: 1px solid var(--lsb-border, rgba(0, 0, 0, 0.25));
+        /* deep-space glass: dark translucent + blur + ambient glow */
+        background: linear-gradient(160deg, rgba(28, 32, 48, 0.92) 0%, rgba(13, 16, 28, 0.97) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.09);
         border-radius: var(--r-lg);
         box-shadow:
-          0 20px 48px rgba(0, 0, 0, 0.4),
-          0 0 0 1px rgba(107, 140, 239, 0.06),
-          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+          0 24px 64px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(107, 140, 239, 0.08),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(22px) saturate(160%);
+        -webkit-backdrop-filter: blur(22px) saturate(160%);
         user-select: none;
         width: min(320px, 92vw); max-width: 320px; min-width: 264px;
         overflow: hidden;
@@ -1219,17 +1222,17 @@
           width 0.35s var(--ease), height 0.35s var(--ease), min-width 0.35s var(--ease),
           max-width 0.35s var(--ease), max-height 0.35s var(--ease), border-radius 0.35s var(--ease);
       }
-      /* decorative ambient glows inside the panel */
+      /* decorative ambient glows inside the panel (deep-space glass) */
       #lsb-panel .lsb-glow { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; border-radius: inherit; }
       #lsb-panel .lsb-glow::before {
-        content: ""; position: absolute; top: -90px; left: -70px; width: 300px; height: 300px;
-        background: radial-gradient(circle, rgba(107, 140, 239, 0.3) 0%, transparent 65%);
-        filter: blur(6px);
+        content: ""; position: absolute; top: -110px; left: -80px; width: 340px; height: 340px;
+        background: radial-gradient(circle, rgba(107, 140, 239, 0.38) 0%, transparent 62%);
+        filter: blur(8px);
       }
       #lsb-panel .lsb-glow::after {
-        content: ""; position: absolute; bottom: -120px; right: -80px; width: 320px; height: 320px;
-        background: radial-gradient(circle, rgba(91, 181, 166, 0.18) 0%, transparent 65%);
-        filter: blur(6px);
+        content: ""; position: absolute; bottom: -130px; right: -90px; width: 360px; height: 360px;
+        background: radial-gradient(circle, rgba(91, 181, 166, 0.22) 0%, transparent 62%);
+        filter: blur(8px);
       }
       @keyframes lsb-panel-in {
         from { opacity: 0; transform: translateY(12px) scale(0.97); }
@@ -1484,9 +1487,6 @@
         position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
         font-size: 12px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
       }
-      /* light theme: ring bg adapts */
-      #lsb-panel[data-theme="light"] .lsb-ring-bg { stroke: rgba(0, 0, 0, 0.08); }
-
       #lsb-panel .lsb-hero-signed {
         display: inline-flex; align-items: center; gap: 5px;
         font-size: 12px; font-weight: 700; color: var(--lsb-ok, #5bb5a6);
