@@ -23,14 +23,14 @@ After install, Tampermonkey auto-updates the script from Greasy Fork using the s
 - **Browsing history**: the panel shows your recent topic / profile visits (`N 分钟前`), stored locally in `GM_*`.
 - **Visited tinting**: previously opened topic titles are muted (`:visited`) so you can spot what you have read.
 - **Panel state memory**: the panel remembers whether it was expanded across page loads.
-- **Designed brand icon**: the header shows a gradient monogram badge instead of the site's placeholder logo; users without a real photo get an initials badge instead of the grey robot avatar.
+- **Real brand icon**: the header shows the site's actual favicon; the avatar always shows the current logged-in user's real avatar.
 - **Milestone notifications**: one-shot desktop notifications (`GM_notification`) when your check-in streak / total days / points cross milestones (e.g. 7-day streak, 100 points).
 - **Multi-tab coordination**: only one tab polls (leader election via `localStorage` heartbeat), so N open tabs do not duplicate notification or auto-signin requests.
 - **Self-update**: Tampermonkey polls Greasy Fork's meta endpoint on its own schedule. New versions land with one click.
 
 ### Changelog
 
-- **1.2.3** (2026-08-15): designed brand icon (gradient monogram) + initials avatar badge (no more grey blobs); browsing-history section with relative timestamps; visited-link tinting; persisted panel open/close state; `match(ctx)` declarative module gate (nodeseek borrow).
+- **1.2.3** (2026-08-15): real site favicon in the header + the current user's real avatar; LDStatus-style browsing-history list (icon chip + title + time pill); visited-link tinting; persisted panel open/close state; `match(ctx)` declarative module gate (nodeseek borrow).
 - **1.2.2** (2026-08-15): segmented pill tab redesign with icons; header icon fallback (never a broken image); fixed panel position (bottom-right); borrowed features — signinTips reminder bar, LRUCache, milestone notifier, relative-time formatter.
 - **1.2.0** (2026-08-15): multi-tab leader election; LDStatus-grade panel redesign; node reference table; diff-style notification rendering; signin IO layer wired.
 - **1.1.6** (2026-08-14): avatar-scope fix — read the avatar only from the sidebar user-card, not the first `<img>` on the page.

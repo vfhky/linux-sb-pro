@@ -1100,6 +1100,20 @@
     }
     const store = createHistoryStore({ storage: LSB.storage });
 
+    // LDStatus-style list: icon chip + title + time pill, hover accent.
+    GM_addStyle(
+      "#lsb-panel .lsb-history-list{list-style:none;margin:0;padding:0;max-height:230px;overflow:auto}" +
+      "#lsb-panel .lsb-history-list li{display:flex;align-items:center;gap:9px;padding:8px 10px;margin:0 -10px;border-radius:10px;transition:background .16s ease}" +
+      "#lsb-panel .lsb-history-list li:hover{background:var(--lsb-bg-hover,rgba(38,42,56,.95))}" +
+      "#lsb-panel .lsb-history-ic{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:8px;flex:none;color:var(--lsb-fg-sec,#9499ad);background:var(--lsb-bg-hover,rgba(38,42,56,.95));transition:color .16s ease}" +
+      "#lsb-panel .lsb-history-list li:hover .lsb-history-ic{color:var(--lsb-accent-light,#8aa4f4)}" +
+      "#lsb-panel .lsb-history-main{flex:1;min-width:0}" +
+      "#lsb-panel .lsb-history-title{display:block;font-size:12px;line-height:1.45;color:var(--lsb-fg-sec,#9499ad);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .16s ease}" +
+      "#lsb-panel .lsb-history-list li:hover .lsb-history-title{color:var(--lsb-fg,#e4e6ed)}" +
+      "#lsb-panel .lsb-history-time{flex:none;font-size:10px;color:var(--lsb-fg-mut,#5d6275);background:var(--lsb-bg-hover,rgba(38,42,56,.95));border:1px solid var(--lsb-border,rgba(255,255,255,.08));padding:2px 8px;border-radius:999px}" +
+      "#lsb-panel .lsb-history-count{font-size:10px;font-weight:700;color:var(--lsb-fg-sec,#9499ad);background:var(--lsb-bg-hover,rgba(38,42,56,.95));border:1px solid var(--lsb-border,rgba(255,255,255,.1));border-radius:999px;padding:0 7px;min-width:17px;text-align:center;line-height:17px}"
+    );
+
     function onRoute(href) {
       store.record(dom.absUrl(href), (document.title || "").trim());
       events.emit("history:updated");
@@ -1115,15 +1129,21 @@
         render: () => {
           const items = store.list().slice(0, 8);
           const lis = items.map((it) => {
+            const isUser = /\.*\/user\//.test(it.url);
+            const icon = isUser
+              ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+              : '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
             const title = LSB.utils.escapeHtml(it.title || it.url);
-            const rel = (typeof formatRelativeTime === "function")
-              ? ` <span class="lsb-history-time">${formatRelativeTime(it.ts)}</span>`
-              : "";
-            return `<li><a href="${LSB.utils.escapeHtml(it.url)}" target="_blank" rel="noopener">${title}</a>${rel}</li>`;
+            const rel = (typeof formatRelativeTime === "function") ? formatRelativeTime(it.ts) : "";
+            return `<li>` +
+              `<span class="lsb-history-ic">${icon}</span>` +
+              `<span class="lsb-history-main"><a class="lsb-history-title" href="${LSB.utils.escapeHtml(it.url)}" target="_blank" rel="noopener">${title}</a></span>` +
+              (rel ? `<span class="lsb-history-time">${rel}</span>` : "") +
+              `</li>`;
           }).join("");
           return { innerHTML:
             `<div class="lsb-section lsb-history" data-lsb="history-section">` +
-            `<div class="lsb-section-title"><span>${LSB.i18n.t("history.title")}</span></div>` +
+            `<div class="lsb-section-title"><span>${LSB.i18n.t("history.title")}</span><span class="lsb-history-count">${items.length}</span></div>` +
             (lis ? `<ul class="lsb-history-list">${lis}</ul>` : `<p class="lsb-empty">${LSB.i18n.t("history.empty")}</p>`) +
             `</div>` };
         },
@@ -1227,15 +1247,7 @@
         border: 2px solid rgba(255, 255, 255, 0.25);
         flex-shrink: 0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      }
-      #lsb-panel .lsb-site-icon-badge {
-        display: inline-flex; align-items: center; justify-content: center;
-        font-weight: 800; font-size: 12px; line-height: 1; letter-spacing: 0.02em;
-        color: #fff; text-transform: lowercase;
-        background:
-          linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 48%),
-          linear-gradient(135deg, #6b8cef 0%, #4a6bc9 100%);
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+        object-fit: cover;
       }
       #lsb-panel .lsb-hdr-text {
         display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
@@ -1339,12 +1351,6 @@
         flex-shrink: 0; background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
         object-fit: cover;
         box-shadow: 0 4px 12px rgba(107, 140, 239, 0.2);
-      }
-      #lsb-panel .lsb-avatar-badge {
-        display: inline-flex; align-items: center; justify-content: center;
-        font-weight: 800; font-size: 16px; color: #fff;
-        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
       }
       #lsb-panel .lsb-user-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
       #lsb-panel .lsb-user-name {
@@ -1546,7 +1552,7 @@
     root.dataset.theme = LSB.panelStyle ? LSB.panelStyle.theme : "auto";
         root.innerHTML = `
       <div class="lsb-hdr lsb-compact" data-lsb="compact">
-        <span class="lsb-site-icon lsb-site-icon-badge" data-lsb="site-icon" title="linux.sb">sb</span>
+        <img class="lsb-site-icon" src="https://linux.sb/app/assets/index.svg" alt="linux.sb" data-lsb="site-icon" />
         <div class="lsb-hdr-text">
           <span class="lsb-title">linux.sb 助手</span>
           <span class="lsb-ver">v<span data-lsb="version">0.0.0</span></span>
@@ -1607,8 +1613,11 @@
     // demand because it is re-created on re-render.
     const refs = (typeof collectRefs === "function") ? collectRefs(root) : {};
     const $ = (key) => refs[key] || root.querySelector(`[data-lsb="${key}"]`);
-    // The header site icon is a designed monogram badge (a <span>), so no
-    // remote image can break — the top bar always looks sharp.
+    // The header site icon is the site's real favicon (index.svg). If it
+    // ever fails to load (offline / 404), hide it rather than showing a
+    // broken-image glyph.
+    const siteIcon = $("site-icon");
+    if (siteIcon) siteIcon.addEventListener("error", () => { siteIcon.hidden = true; }, { once: true });
     const dot = $("dot");
     const nameEl = $("name");
     const avatarEl = $("avatar");
@@ -1624,34 +1633,12 @@
     // Restore the persisted panel open/close state (LDStatus Panel borrow).
     try { if (LSB.storage.get("panel.open")) root.classList.add("lsb-open"); } catch (e) { /* ignore */ }
 
-    // Clicking the avatar (or its initials badge) opens the profile.
-    function openProfile(ev) {
+    // Clicking the avatar opens the profile.
+    avatarEl.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const url = avatarEl.dataset.profileUrl;
       if (url) window.open(url, "_blank", "noopener");
-    }
-    avatarEl.addEventListener("click", openProfile);
-
-    // When the user has no real photo the site serves a DiceBear robot with a
-    // full-canvas grey background — swap it for a designed initials badge so
-    // the top area never shows a grey blob. Real photos stay as the <img>.
-    let avatarBadgeEl = null;
-    function syncAvatarBadge(u) {
-      const showBadge = !!u && !!u.isLoggedIn && (u.avatarIsDicebear || !u.avatarUrl);
-      if (showBadge) {
-        avatarEl.hidden = true;
-        if (!avatarBadgeEl) {
-          avatarBadgeEl = document.createElement("span");
-          avatarBadgeEl.className = "lsb-avatar lsb-avatar-badge";
-          avatarBadgeEl.addEventListener("click", openProfile);
-          avatarEl.parentNode.insertBefore(avatarBadgeEl, avatarEl);
-        }
-        avatarBadgeEl.textContent = ((u.nickname || "?").trim().charAt(0) || "?").toUpperCase();
-      } else {
-        avatarEl.hidden = false;
-        if (avatarBadgeEl) { avatarBadgeEl.remove(); avatarBadgeEl = null; }
-      }
-    }
+    });
 
     function isLoggedIn() {
       return !!(user && user.info && user.info.id);
@@ -1922,8 +1909,7 @@
         $("rank-row").hidden = true;
         return;
       }
-      if (u.avatarUrl && !u.avatarIsDicebear) avatarEl.src = u.avatarUrl;
-      syncAvatarBadge(u);
+      if (u.avatarUrl) avatarEl.src = u.avatarUrl;
       nameEl.textContent = u.nickname || `用户 #${u.id}`;
       if (u.profileUrl) avatarEl.dataset.profileUrl = u.profileUrl;
 
