@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-15T16:03:29.293Z
+ * built: 2026-08-15T16:31:52.181Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -2476,23 +2476,21 @@ function _userIdFromHref(href) {
         --ease: cubic-bezier(0.22, 1, 0.36, 1);
         --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
         --ease-out: cubic-bezier(0, 0.55, 0.45, 1);
-        --r-sm: 10px; --r-md: 14px; --r-lg: 20px;
+        --r-sm: 6px; --r-md: 10px; --r-lg: 13px;
       }
       /* ================= panel: deep-space glass ================= */
       #lsb-panel {
         position: fixed; z-index: 2147483646;
         font: 13px/1.55 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
-        color: var(--lsb-fg, #e8eaf2);
-        background: linear-gradient(180deg, rgba(24, 28, 42, 0.94) 0%, rgba(13, 16, 25, 0.96) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.09);
+        color: var(--lsb-fg, #e4e6ed);
+        background: var(--lsb-bg, #12131a);
+        border: 1px solid var(--lsb-border, rgba(0, 0, 0, 0.25));
         border-radius: var(--r-lg);
         box-shadow:
-          0 24px 64px rgba(0, 0, 0, 0.5),
-          0 0 0 1px rgba(107, 140, 239, 0.07),
-          inset 0 1px 0 rgba(255, 255, 255, 0.06);
-        backdrop-filter: blur(24px) saturate(160%);
-        -webkit-backdrop-filter: blur(24px) saturate(160%);
+          0 20px 48px rgba(0, 0, 0, 0.4),
+          0 0 0 1px rgba(107, 140, 239, 0.06),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
         user-select: none;
         width: min(320px, 92vw); max-width: 320px; min-width: 264px;
         overflow: hidden;
@@ -2551,6 +2549,9 @@ function _userIdFromHref(href) {
         border: 2px solid rgba(255, 255, 255, 0.45);
         box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.12), 0 2px 10px rgba(0, 0, 0, 0.3);
       }
+      /* body max-height: LDStatus calc(var(--h) - 180px); we cap with min() */
+      #lsb-panel .lsb-content { min-height: 0; }
+      #lsb-panel .lsb-details.lsb-open-scroll { overflow-y: auto; }
       #lsb-panel:not(.lsb-open) .lsb-details { max-height: 0 !important; opacity: 0; visibility: hidden; }
       #lsb-panel:not(.lsb-open) .lsb-dot {
         position: absolute; top: 3px; right: 3px;
@@ -2562,17 +2563,17 @@ function _userIdFromHref(href) {
       /* ================= header: gradient brand band ================= */
       #lsb-panel .lsb-hdr {
         position: relative; z-index: 1;
-        display: flex; align-items: center; gap: 10px;
-        padding: 12px 14px; min-height: 56px;
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 12px; min-height: 52px;
         cursor: pointer;
-        background: linear-gradient(135deg, #5a7de0 0%, #4a6bc9 55%, #3d5aaa 100%);
+        background: linear-gradient(135deg, #5a7de0 0%, #4a6bc9 100%);
         overflow: hidden;
         flex-shrink: 0;
         transition: filter 0.25s ease;
       }
       #lsb-panel .lsb-hdr::before {
         content: ""; position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 45%, transparent 100%);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
         pointer-events: none;
       }
       #lsb-panel .lsb-hdr::after {
@@ -2583,26 +2584,25 @@ function _userIdFromHref(href) {
       #lsb-panel .lsb-hdr:hover::after { opacity: 1; }
       #lsb-panel .lsb-hdr:hover { filter: brightness(1.05); }
       #lsb-panel .lsb-site-icon {
-        width: 30px; height: 30px; border-radius: 50%;
-        border: 2px solid rgba(255, 255, 255, 0.5);
-        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14), 0 4px 14px rgba(0, 0, 0, 0.35);
+        width: 26px; height: 26px; border-radius: 7px;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         object-fit: cover; flex-shrink: 0;
         position: relative; z-index: 1;
       }
       #lsb-panel .lsb-hdr-text {
-        display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
         min-width: 0; flex: 1 1 0; overflow: hidden; position: relative; z-index: 1;
       }
       #lsb-panel .lsb-title {
-        font-weight: 800; font-size: 14px; letter-spacing: -0.01em;
-        background: linear-gradient(90deg, #ffffff 0%, #dce6ff 100%);
-        -webkit-background-clip: text; background-clip: text;
-        -webkit-text-fill-color: transparent; color: transparent;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; max-width: 100%;
+        font-weight: 800; font-size: 14px; letter-spacing: -0.02em;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; max-width: 100%;
       }
       /* animated gradient app name (LDStatus .ldsp-app-name) */
       #lsb-panel .lsb-app-name {
-        font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+        font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
         background: linear-gradient(90deg, #a8c0f8, #7a9eef, #7cc9bc, #7a9eef, #a8c0f8);
         background-size: 200% auto;
         -webkit-background-clip: text; background-clip: text;
@@ -2629,25 +2629,25 @@ function _userIdFromHref(href) {
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.45; transform: scale(0.75); }
       }
-      #lsb-panel .lsb-hdr-info { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; position: relative; z-index: 1; }
+      #lsb-panel .lsb-hdr-info { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; position: relative; z-index: 1; }
       /* site icon + version stacked (LDStatus .ldsp-site-wrap) */
       #lsb-panel .lsb-site-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0; }
-      #lsb-panel .lsb-site-ver { font-size: 8px; font-weight: 700; color: #fff; text-align: center; background: rgba(0, 0, 0, 0.28); padding: 1px 5px; border-radius: 5px; letter-spacing: 0.02em; }
-      #lsb-panel .lsb-hdr-btns { display: flex; align-items: center; gap: 7px; position: relative; z-index: 1; }
+      #lsb-panel .lsb-site-ver { font-size: 9px; font-weight: 700; color: #fff; text-align: center; background: rgba(0, 0, 0, 0.25); padding: 1px 5px; border-radius: 5px; letter-spacing: 0.02em; }
+      #lsb-panel .lsb-hdr-btns { display: flex; align-items: center; gap: 4px; position: relative; z-index: 1; }
       #lsb-panel .lsb-hdr-btn {
-        width: 30px; height: 30px; border-radius: 10px;
+        width: 28px; height: 28px; border-radius: var(--r-sm);
         display: flex; align-items: center; justify-content: center;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+        border: none;
+        background: rgba(255, 255, 255, 0.12);
         color: #fff;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 6px rgba(0, 0, 0, 0.18);
-        cursor: pointer; backdrop-filter: blur(6px);
+        cursor: pointer; backdrop-filter: blur(4px);
+        font-size: 12px;
         transition: background 0.15s ease, box-shadow 0.2s ease, transform 0.25s var(--ease);
       }
       #lsb-panel .lsb-hdr-btn:hover {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.14));
-        transform: translateY(-2px) scale(1.06);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 16px rgba(0, 0, 0, 0.3);
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
       /* Force the icon SVGs to their intended size — this site's layout
          otherwise collapses the intrinsic width (renders as a sliver). */
@@ -2693,58 +2693,67 @@ function _userIdFromHref(href) {
       /* ================= user card: hero ================= */
       #lsb-panel .lsb-user {
         position: relative; z-index: 1;
-        display: grid; grid-template-columns: minmax(0, 1fr) minmax(76px, 92px); align-items: stretch; gap: 12px;
-        padding: 16px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 60%), var(--lsb-bg-card, rgba(22, 26, 38, 0.85));
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(72px, 92px); align-items: stretch; gap: 10px;
+        padding: 10px 16px 10px;
+        background: var(--lsb-bg-card, rgba(24, 26, 36, 0.92));
         border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
       }
       #lsb-panel .lsb-user::before {
-        content: ""; position: absolute; top: 0; left: 16px; right: 16px; height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(107, 140, 239, 0.55), transparent);
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(107, 140, 239, 0.3), transparent);
       }
-      #lsb-panel .lsb-user-left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-      #lsb-panel .lsb-user-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      #lsb-panel .lsb-user-left { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+      #lsb-panel .lsb-user-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
       #lsb-panel .lsb-user-status { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-      /* gradient-ring avatar frame */
+      /* avatar: LDStatus .ldsp-avatar — accent border, no gradient frame */
       #lsb-panel .lsb-avatar-frame {
-        width: 48px; height: 48px; border-radius: 16px; flex-shrink: 0;
-        padding: 2px; display: block;
-        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4 50%, rgba(91, 181, 166, 0.85));
-        box-shadow: 0 6px 18px rgba(107, 140, 239, 0.32);
+        width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+        padding: 0; display: block; background: none; box-shadow: none;
       }
       #lsb-panel .lsb-avatar {
-        width: 44px; height: 44px; border-radius: 14px;
+        width: 44px; height: 44px; border-radius: 12px;
         object-fit: cover; display: block;
+        border: 2px solid var(--lsb-accent, #6b8cef);
         background: var(--lsb-bg-el, rgba(32, 35, 48, 0.9));
         cursor: pointer;
-        transition: transform 0.3s var(--ease);
+        box-shadow: 0 4px 12px rgba(107, 140, 239, 0.2);
+        transition: transform 0.3s var(--ease), box-shadow 0.3s, border-color 0.2s;
       }
-      #lsb-panel .lsb-avatar:hover { transform: scale(1.05); }
+      #lsb-panel .lsb-avatar:hover { transform: scale(1.08) rotate(-3deg); border-color: var(--lsb-accent-light, #8aa4f4); box-shadow: 0 6px 20px rgba(107, 140, 239, 0.35); }
       #lsb-panel .lsb-user-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
       #lsb-panel .lsb-user-name {
-        font-size: 16px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.25;
+        font-size: 16px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3;
         background: linear-gradient(90deg, var(--lsb-fg, #e4e6ed) 0%, var(--lsb-fg-sec, #9499ad) 110%);
         -webkit-background-clip: text; background-clip: text;
         -webkit-text-fill-color: transparent; color: transparent;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       #lsb-panel .lsb-user-meta {
-        font-size: 11px; color: var(--lsb-fg-mut, #5d6275);
+        font-size: 12px; color: var(--lsb-fg-mut, #5d6275);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       /* stats card (LDStatus .ldsp-reading slot): check-in streak */
       #lsb-panel .lsb-stats {
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-        padding: 10px 8px; border-radius: 14px; align-self: stretch; min-width: 76px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 100%);
+        padding: 8px 8px 6px; border-radius: var(--r-md); align-self: stretch;
+        min-width: 84px; width: min(100%, 92px); max-width: min(100%, calc(var(--lsb-w, 320px) * 0.46));
+        aspect-ratio: 2 / 1;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 100%), var(--lsb-bg-card, rgba(24, 26, 36, 0.92));
         border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.08));
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
         position: relative; overflow: hidden;
       }
-      #lsb-panel .lsb-stats::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(107, 140, 239, 0.12), transparent 70%); }
-      #lsb-panel .lsb-stats-icon { font-size: 18px; line-height: 1; margin-bottom: 4px; position: relative; }
-      #lsb-panel .lsb-stats-num { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; position: relative; }
-      #lsb-panel .lsb-stats-label { font-size: 9px; color: var(--lsb-fg-mut, #5d6275); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; position: relative; }
+      #lsb-panel .lsb-stats::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(107, 140, 239, 0.12), transparent 70%); pointer-events: none; }
+      #lsb-panel .lsb-stats-icon { font-size: 23px; line-height: 1; margin-bottom: 4px; position: relative; animation: lsb-stats-bounce 3s ease-in-out infinite; }
+      @keyframes lsb-stats-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+      #lsb-panel .lsb-stats-num { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; position: relative; }
+      #lsb-panel .lsb-stats-label {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-height: 18px; padding: 0 8px; border-radius: 999px; position: relative;
+        background: rgba(107, 140, 239, 0.16); border: 1px solid rgba(107, 140, 239, 0.24);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        font-size: 9px; color: var(--lsb-fg-sec, #9499ad); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      }
       #lsb-panel .lsb-hero-signed {
         display: inline-flex; align-items: center; gap: 5px;
         font-size: 12px; font-weight: 700; color: var(--lsb-ok, #5bb5a6);
@@ -2773,17 +2782,19 @@ function _userIdFromHref(href) {
       /* ================= tabs: floating glass + sliding indicator ================= */
       #lsb-panel .lsb-tabs {
         position: relative; z-index: 1; display: flex; gap: 5px;
-        padding: 6px;
-        margin: 10px 12px 8px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 7px 9px;
+        margin: 8px 10px 6px;
+        background: rgba(32, 36, 50, 0.62);
+        backdrop-filter: blur(20px) saturate(175%);
+        -webkit-backdrop-filter: blur(20px) saturate(175%);
+        border: 1px solid rgba(255, 255, 255, 0.11);
         border-radius: 14px;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 14px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.16);
         overflow: hidden;
         flex-shrink: 0;
       }
       #lsb-panel .lsb-tab-indicator {
-        position: absolute; top: 6px; left: 6px; height: calc(100% - 12px);
+        position: absolute; top: 5px; left: 6px; height: calc(100% - 10px);
         border-radius: 10px; pointer-events: none; z-index: 0;
         opacity: 0;
         transition: left 0.42s cubic-bezier(0.32, 1.2, 0.32, 1), width 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s ease;
@@ -2791,23 +2802,23 @@ function _userIdFromHref(href) {
       #lsb-panel .lsb-tab-indicator.show { opacity: 1; }
       #lsb-panel .lsb-tab-indicator-glass {
         position: absolute; inset: 0; border-radius: inherit;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
-        box-shadow: 0 6px 14px rgba(42, 64, 120, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-        border: 1px solid rgba(138, 164, 244, 0.45);
+        background: rgba(255, 255, 255, 0.14);
+        box-shadow: 0 7px 16px rgba(42, 64, 120, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+        border: 1px solid rgba(138, 164, 244, 0.4);
       }
       #lsb-panel .lsb-tab-indicator-shine {
-        position: absolute; top: 1px; left: 12%; right: 12%; height: 48%;
+        position: absolute; top: 1px; left: 10%; right: 10%; height: 46%;
         border-radius: 8px 8px 50% 50%;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.1) 45%, transparent 100%);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.12) 45%, transparent 100%);
         pointer-events: none;
       }
       #lsb-panel .lsb-tab {
         position: relative; z-index: 1;
-        flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-        padding: 8px 10px;
+        flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+        padding: 7px 8px;
         border: none; background: transparent;
         color: var(--lsb-fg-sec, #9499ad);
-        font: inherit; font-size: 12px; font-weight: 600;
+        font: inherit; font-size: 11px; font-weight: 600;
         border-radius: 10px; cursor: pointer;
         white-space: nowrap; min-width: 0; overflow: hidden;
         transition: color 0.2s, transform 0.15s;
@@ -2834,7 +2845,7 @@ function _userIdFromHref(href) {
       /* ================= content + sections ================= */
       #lsb-panel .lsb-pane { display: none; }
       #lsb-panel .lsb-pane.active { display: block; animation: lsb-enter 0.22s var(--ease-out); }
-      #lsb-panel .lsb-section { padding: 4px 12px 12px; }
+      #lsb-panel .lsb-section { padding: 10px; }
       #lsb-panel .lsb-section-title {
         font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
         color: var(--lsb-fg-mut, #5d6275); margin: 8px 2px 8px; font-weight: 700;
@@ -2873,11 +2884,12 @@ function _userIdFromHref(href) {
 
       /* ================= settings dropdown (LDStatus .ldsp-settings-menu) ================= */
       #lsb-panel .lsb-settings-menu {
-        position: absolute; top: 100%; left: 8px; right: 8px; z-index: 30;
+        position: absolute; top: 34px; left: 8px; right: auto; z-index: 30;
+        width: clamp(220px, 85%, 300px);
         padding: 8px;
         background: var(--lsb-bg-card, rgba(24, 26, 36, 0.97));
         border: 1px solid var(--lsb-border2, rgba(255, 255, 255, 0.1));
-        border-radius: 14px;
+        border-radius: 12px;
         box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
         opacity: 0; pointer-events: none;
         transform: translateY(-8px) scale(0.98);
