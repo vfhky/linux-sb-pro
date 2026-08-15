@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-15T15:05:00.010Z
+ * built: 2026-08-15T15:13:21.195Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -2515,8 +2515,9 @@ function _userIdFromHref(href) {
       #lsb-panel .lsb-hdr:hover::after { opacity: 1; }
       #lsb-panel .lsb-hdr:hover { filter: brightness(1.04); }
       #lsb-panel .lsb-site-icon {
-        width: 26px; height: 26px; border-radius: 7px;
-        border: 2px solid rgba(255, 255, 255, 0.25);
+        width: 26px; height: 26px;
+        border-radius: 50%; /* the favicon itself is a circle — show it as one */
+        border: 2px solid rgba(255, 255, 255, 0.35);
         flex-shrink: 0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         object-fit: cover;
@@ -2618,7 +2619,8 @@ function _userIdFromHref(href) {
       }
       #lsb-panel .lsb-user-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
       #lsb-panel .lsb-avatar {
-        width: 36px; height: 36px; border-radius: 10px;
+        width: 36px; height: 36px;
+        border-radius: 50%; /* standard avatar shape for the real avatar image */
         border: 2px solid var(--lsb-accent, #6b8cef);
         flex-shrink: 0; background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
         object-fit: cover;
