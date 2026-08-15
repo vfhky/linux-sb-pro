@@ -12,7 +12,6 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
-// @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-idle
@@ -31,13 +30,13 @@
  *     |     logger   leveled logger (debug/info/warn/error) with module tag
  *     |     utils    DOM helpers, url parsing, formatters
  *     |     storage  GM_* wrapper with versioned keys, JSON, TTL
- *     |     http     fetch wrapper, xhr fallback, cookie-aware
+ *     |     http     native fetch wrapper with timeout, cookie-aware
  *     |     events   tiny pub/sub used by modules
  *     |     dom      waitForElement, onRouteChange, scrape helpers
  *     |
  *     +-- modules/   (each module is independent, registers itself)
  *     |     user     extract logged-in user info from the page (this module)
- *     |     signin   (placeholder) detect / trigger sign-in
+ *     |     signin   detect / trigger daily check-in (manual + auto)
  *     |     ...
  *     |
  *     +-- api/       forum-specific helpers
@@ -86,7 +85,7 @@
     },
     modules: {
       user: true,         // extract logged-in user info
-      signin: true,       // placeholder, not implemented yet
+      signin: true,       // daily check-in: status detect, one-click + auto signin
       ui: true,           // floating panel showing collected info
       debug: false,       // verbose console
     },
@@ -232,7 +231,7 @@
   })();
 
   // =====================================================================
-  // core/http  (fetch with timeout, JSON convenience, GM fallback)
+  // core/http  (native fetch wrapper: timeout, JSON convenience, same-origin cookies)
   // =====================================================================
   LSB.http = {
     async fetch(url, opts = {}) {
@@ -546,6 +545,10 @@
      * Emits user:changed only when the value actually changes, to avoid feedback loops
      * with subscribers (e.g. ui.refresh) that re-invoke getCurrent.
      */
+    // Last known user, kept in sync with getCurrent() so other modules can
+    // do a SYNCHRONOUS logged-in/id check (user.info.id) without awaiting
+    // the DOM read again. Consumers: signin auto-poller, notif, ui.
+    let _info = null;
     let _lastEmittedKey = null;
     async function getCurrent() {
       let fromDom = null;
@@ -565,6 +568,7 @@
             isLoggedIn: true,
             source: "nav-mine-only",
           };
+          _info = merged;
           return merged;
         }
         // Persist a normalized version.
@@ -575,10 +579,12 @@
           _lastEmittedKey = key;
           events.emit("user:changed", normalized);
         }
+        _info = normalized;
         return normalized;
       }
-      if (cached) return cached;
+      if (cached) { _info = cached; return cached; }
       // Last resort: nothing on the page yet. Return null and let caller decide.
+      _info = null;
       return null;
     }
 
@@ -609,6 +615,9 @@
       isLoggedIn,
       readFromDom,
       readFromUserPage,
+      // Synchronous view of the last known logged-in user (null until the
+      // first getCurrent() resolves). Consumers check user.info.id.
+      get info() { return _info; },
     };
   }, ["config", "dom", "events"]);
 
@@ -617,7 +626,11 @@
   // =====================================================================
   LSB.register("signin", function ({ config, dom, events, http, user }) {
     const log = LSB.logger.make("signin");
-    const CHECKIN_URL = `${config.site.apiBase}/daily_checkin`;
+    // Shared fetch/submit IO layer (lib/checkin-fetch.mjs, inlined at build
+    // time). The CSRF dance lives in exactly one unit-tested place.
+    const io = (typeof createCheckinIO === "function")
+      ? createCheckinIO({ http, base: config.site.apiBase })
+      : null;
 
     /** Heuristic status detection from a DOM context. */
     function _statusFromNode(node) {
@@ -657,13 +670,11 @@
 
     /** Fetch /daily_checkin and parse status + csrf. */
     async function _fetchStatus() {
-      // Delegate parsing to the structure-agnostic parseCheckinPage in
-      // core/ (inlined from lib/checkin-parse.mjs). It handles both the
-      // home-sidebar card AND the dedicated /daily_checkin page layout
-      // (.admin-plugin-summary > span), so we never have to update
-      // hardcoded selectors here when the site changes.
-      const html = await LSB.http.getHtml(CHECKIN_URL);
-      return { ...parseCheckinPage(html), source: "http-fetch" };
+      // Delegated to the IO layer (lib/checkin-fetch.mjs) which wraps the
+      // structure-agnostic parseCheckinPage (lib/checkin-parse.mjs) — both
+      // unit-tested. Falls back to "unknown" when the lib was not inlined.
+      if (!io) return { status: "unknown", csrf: null, hasForm: false, stats: { streak: 0, total: 0 } };
+      return io.fetchStatus();
     }
 
     /** Public: get current signin status. */
@@ -694,29 +705,10 @@
           return { ok: true, status: "submitted", source: "clicked", stats: fetched.stats };
         }
       }
-      // Otherwise fetch the checkin page, grab the CSRF, POST it.
-      const fetched = await _fetchStatus();
-      if (fetched.status === "signed-in") {
-        return { ok: true, status: "signed-in", source: fetched.source };
-      }
-      if (!fetched.csrf) {
-        return { ok: false, status: fetched.status, reason: "no-csrf-token" };
-      }
-      const body = new URLSearchParams({ _csrf: fetched.csrf }).toString();
-      const res = await LSB.http.fetch(CHECKIN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-      });
-      // We can't always read the response body (it may redirect). Check current status.
-      const after = await _fetchStatus();
-      return {
-        ok: res.ok || after.status === "signed-in",
-        status: after.status,
-        source: "http-post",
-        httpStatus: res.status,
-        stats: after.stats,
-      };
+      // Otherwise the IO layer handles fetch -> CSRF -> POST -> verify
+      // (lib/checkin-fetch.mjs, unit-tested).
+      if (!io) return { ok: false, status: "unknown", reason: "io-unavailable" };
+      return io.submit();
     }
 
     /** Public: check status, sign in if pending. Returns the action taken. */
@@ -870,7 +862,7 @@
       name: "panelStyle",
       init() { events.emit("panel:reapply", { pos: pos.get(), theme: theme.get() }); },
     };
-  });
+  }, ["config", "events"]);
 
   LSB.register("notif", function ({ config, http, events, user }) {
     const log = LSB.logger.make("notif");
@@ -964,7 +956,7 @@
     }
 
     return { name: "notif", init: bindUser };
-  });
+  }, ["config", "http", "events", "user"]);
 
   LSB.register("ui", function ({ config, dom, events, user, signin, panelStyle, notif }) {
     const log = LSB.logger.make("ui");
@@ -1463,6 +1455,15 @@
   function start() {
     try { _bootAll(); }
     catch (err) { (LSB.logger.make("boot")).error("boot failed", err); }
+    // Run every module's init() hook now that all factories are resolved
+    // (e.g. notif.bindUser subscribes to user:changed and starts polling).
+    // Factories run in registration order, so subscribers (ui) exist before
+    // publishers (panelStyle, notif) emit their boot events.
+    for (const [name, entry] of _registry) {
+      if (!entry.enabled || !entry.instance || typeof entry.instance.init !== "function") continue;
+      try { entry.instance.init(); }
+      catch (err) { (LSB.logger.make("register")).error("init failed:", name, err); }
+    }
     // Expose a tiny API for other userscripts and the devtools console.
     LSB.api.getCurrentUser = () => {
       const m = _registry.get("user");

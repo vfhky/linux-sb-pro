@@ -45,6 +45,8 @@ export default async function run() {
     const r = await io.submit();
     assert.equal(r.status, "signed-in");
     assert.equal(r.action, "signed-in");
+    assert.equal(r.stats.total, 47, "submit must carry the verified stats");
+    assert.equal(r.stats.streak, 3);
     assert.equal(http.calls.length, 3);
     assert.equal(http.calls[0][0], "get");
     assert.equal(http.calls[1][0], "post");
@@ -68,6 +70,7 @@ export default async function run() {
     const r = await io.submit();
     assert.equal(r.status, "signed-in");
     assert.equal(r.action, "none");
+    assert.equal(r.stats.total, 47, "no-op submit must still expose current stats");
     assert.equal(http.calls.length, 1); // no POST fired
   }
 }

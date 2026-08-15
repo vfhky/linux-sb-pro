@@ -58,18 +58,19 @@ To add a feature, append a `LSB.register(...)` block at the bottom of `linux-sb-
 ```bash
 npm install
 
-# Start a local file server on http://127.0.0.1:8123 serving the dev script.
-node serve.mjs &
+# Build once, then start a local file server on http://127.0.0.1:8123
+# serving the built script (serve.mjs serves dist/ by default).
+node build.mjs && node serve.mjs &
 
-# Start Chrome with the debug port (Windows).
+# Start Chrome with the debug port (Windows). The profile
+# (.chrome-profile-copy/) carries the local Tampermonkey install whose
+# script's @updateURL points at http://127.0.0.1:8123/linux-sb-suite.user.js.
 powershell -ExecutionPolicy Bypass -File start-chrome.ps1
 
-# Drive Chrome via CDP.
-node chrome-cdp.mjs list
-node chrome-cdp.mjs eval "window.LSB.api.getCurrentUser()"
-
-# After editing the dev script, push the update to your local TM install.
-node chrome-cdp.mjs tm-update
+# Install the script into Tampermonkey once (visit the URL above). After
+# every edit + `node build.mjs`, click the script's "Trigger Update" in the
+# Tampermonkey dashboard (or press the update-check button) — Tampermonkey
+# re-fetches the @updateURL and installs the new version automatically.
 
 # Run the unit tests (10 cases across core/ and lib/).
 npm test
@@ -79,7 +80,7 @@ npm test
 
 The repo keeps `linux-sb-suite.user.js` as the dev version (with a localhost `@updateURL` so the dev loop self-updates). `dist/linux-sb-suite.user.js` is the public artifact that ships to users.
 
-`build.mjs` reads `.build-meta.json` and rewrites the public file's metadata: `@version`, `@author`, `@namespace`, `@description`, `@license`, plus the `@updateURL` / `@downloadURL` that point at Greasy Fork's auto-update endpoints. It also inlines `core/*.mjs` and `lib/*.mjs` so the resulting file is self-contained.
+`build.mjs` reads `.build-meta.json` and rewrites the public file's metadata: `@version`, `@author`, `@namespace`, `@description`, `@license`, plus the `@updateURL` / `@downloadURL` that point at Greasy Fork's auto-update endpoints. It also inlines `core/*.mjs` and `lib/*.mjs` so the resulting file is self-contained. The test-only fixture builder (`lib/build-fixture.mjs`) is excluded from the public bundle.
 
 Release flow once a feature is ready:
 

@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 
 export function listLibFiles(libDir) {
   return readdirSync(libDir)
-    .filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs"))
+    .filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs") && f !== "build-fixture.mjs")
     .sort()
     .map((f) => `${libDir}/${f}`);
 }
