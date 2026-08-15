@@ -9,5 +9,14 @@ export default async function run() {
   const light = getPalette("light");
   assert.equal(typeof light.bg, "string");
   assert.equal(typeof light.fg, "string");
+  // design-token fields used by the upgraded UI
+  assert.equal(typeof light.accent, "string");
+  assert.equal(typeof light.bgCard, "string");
+  assert.equal(typeof light.glow, "string");
+  const dark = getPalette("dark");
+  assert.equal(typeof dark.accent, "string");
+  assert.equal(typeof dark.fgSec, "string");
+  assert.equal(typeof dark.scrollbar, "string");
+  assert.equal(typeof dark.scrollbarHover, "string");
   assert.throws(() => getPalette("auto"), /auto/);
 }
