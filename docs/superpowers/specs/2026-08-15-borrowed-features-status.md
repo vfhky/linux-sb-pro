@@ -28,3 +28,12 @@
 
 `test/lru-cache.test.mjs`、`test/notifier.test.mjs`、`test/signin-tips.test.mjs`（linkedom DOM 桩）、
 `test/time-format.test.mjs` — 随 `npm test` 运行（当前 22 个测试文件）。
+## 1.2.3 新增
+
+| 功能 | 来源 | 落地 |
+|------|------|------|
+| match(ctx) 模块门禁 | nodeseek §2.6 | `LSB.register(name, factory, deps, match)`，init 前短路（已用于 notifier） |
+| history 浏览历史 | nodeseek | `lib/history-store.mjs` + `history` 模块（面板 section + 相对时间） |
+| visitedColor 已访问染色 | nodeseek | `visited` 模块：`a.post-title:visited`（零侵入、跟随主题） |
+| 面板展开状态持久化 | LDStatus Panel 状态机 | `panel.open` 存储，跨页面保持 |
+| 品牌图标 / 首字母头像徽标 | 自研 UI | 替换 stormkit 灰圆 icon 与 DiceBear 灰底头像 |

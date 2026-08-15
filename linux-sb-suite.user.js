@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.2.2-dev
+// @version      1.2.3-dev
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @author       vfhky
 // @match        https://linux.sb/*
@@ -64,7 +64,7 @@
 
   // ----- guard: run once per page ---------------------------------------
   if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.2.2-dev" });
+  const LSB = (root.LSB = { __booted: true, version: "1.2.3-dev" });
 
   // =====================================================================
   // core/config
@@ -176,6 +176,11 @@
         h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
       }
       return h.toString(16);
+    },
+    escapeHtml(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     },
   };
 
@@ -314,6 +319,8 @@
     "panel.theme.light":   { zh: "浅色",     en: "Light" },
     "panel.theme.dark":    { zh: "深色",     en: "Dark" },
     "notif.title":         { zh: "通知",     en: "Notifications" },
+    "history.title":       { zh: "浏览历史",  en: "History" },
+    "history.empty":       { zh: "暂无浏览历史", en: "No history yet" },
     "settings.group.panel": { zh: "面板",     en: "Panel" },
     "settings.group.signin": { zh: "签到",    en: "Sign-in" },
     "notif.empty":         { zh: "暂无通知", en: "No notifications" },
@@ -425,10 +432,10 @@
   // =====================================================================
   // module registry  (topological init)
   // =====================================================================
-  const _registry = new Map();       // name -> { factory, deps, instance, enabled }
+  const _registry = new Map();       // name -> { factory, deps, instance, enabled, match }
   const _pendingInit = [];           // modules whose deps are not yet resolved
 
-  LSB.register = function (name, factory, deps = []) {
+  LSB.register = function (name, factory, deps = [], match) {
     if (_registry.has(name)) {
       (LSB.logger.make("register")).warn("duplicate module:", name);
       return;
@@ -436,7 +443,9 @@
     if (!LSB.utils.isFunction(factory)) {
       throw new Error(`LSB.register("${name}"): factory must be a function`);
     }
-    _registry.set(name, { factory, deps, instance: null, enabled: true });
+    // Optional declarative gate (nodeseek borrow): when match(ctx) returns
+    // false, the module's init() is skipped for this page/session.
+    _registry.set(name, { factory, deps, instance: null, enabled: true, match: typeof match === "function" ? match : null });
   };
 
   // Resolve a dep name: registry first, then LSB[name] (core namespace).
@@ -1078,7 +1087,64 @@
     events.on("signin:auto", onStatus);
     events.on("signin:status-changed", onStatus);
     return { name: "notifier", init() {} };
-  }, ["events", "signin", "user"]);
+  }, ["events", "signin", "user"], (ctx) => !!(ctx.user && ctx.user.id));
+
+  // =====================================================================
+  // module: history  (local browsing history for topics / users)
+  // =====================================================================
+  LSB.register("history", function ({ dom, events }) {
+    const log = LSB.logger.make("history");
+    if (typeof createHistoryStore !== "function") {
+      log.warn("createHistoryStore not inlined; history disabled");
+      return { name: "history", init() {} };
+    }
+    const store = createHistoryStore({ storage: LSB.storage });
+
+    function onRoute(href) {
+      store.record(dom.absUrl(href), (document.title || "").trim());
+      events.emit("history:updated");
+    }
+    dom.onRouteChange(onRoute);
+    // Also record the initial page (only trackable paths are kept).
+    if (typeof isTrackableUrl === "function" && isTrackableUrl(location.href)) onRoute(location.href);
+
+    if (LSB.sections) {
+      LSB.sections.register("history", {
+        order: 1,
+        hidden: () => store.list().length === 0,
+        render: () => {
+          const items = store.list().slice(0, 8);
+          const lis = items.map((it) => {
+            const title = LSB.utils.escapeHtml(it.title || it.url);
+            const rel = (typeof formatRelativeTime === "function")
+              ? ` <span class="lsb-history-time">${formatRelativeTime(it.ts)}</span>`
+              : "";
+            return `<li><a href="${LSB.utils.escapeHtml(it.url)}" target="_blank" rel="noopener">${title}</a>${rel}</li>`;
+          }).join("");
+          return { innerHTML:
+            `<div class="lsb-section lsb-history" data-lsb="history-section">` +
+            `<div class="lsb-section-title"><span>${LSB.i18n.t("history.title")}</span></div>` +
+            (lis ? `<ul class="lsb-history-list">${lis}</ul>` : `<p class="lsb-empty">${LSB.i18n.t("history.empty")}</p>`) +
+            `</div>` };
+        },
+      });
+    }
+
+    // Re-render the section when history changes (ui.refresh re-renders all sections).
+    events.on("history:updated", () => { if (LSB.api && typeof LSB.api.refreshUI === "function") LSB.api.refreshUI(); });
+    return { name: "history", store };
+  }, ["dom", "events"]);
+
+  // =====================================================================
+  // module: visited  (visited-link tinting for topic titles)
+  // =====================================================================
+  LSB.register("visited", function () {
+    // One CSS rule, scoped to the site's topic-title links (a.post-title),
+    // so other link styles are untouched. The muted colour follows the panel
+    // theme through the CSS variables applied on documentElement.
+    GM_addStyle("a.post-title:visited{color:var(--lsb-fg-mut,#8590a6);opacity:.8}");
+    return { name: "visited", init() {} };
+  }, []);
 
 
   LSB.register("ui", function ({ config, dom, events, user, signin, panelStyle }) {
@@ -1161,14 +1227,15 @@
         border: 2px solid rgba(255, 255, 255, 0.25);
         flex-shrink: 0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        object-fit: cover;
       }
-      #lsb-panel .lsb-site-icon-fallback {
+      #lsb-panel .lsb-site-icon-badge {
         display: inline-flex; align-items: center; justify-content: center;
-        font-weight: 800; font-size: 11px; letter-spacing: 0.06em;
-        color: #fff;
-        background: linear-gradient(135deg, #5a7de0 0%, #4a6bc9 100%);
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        font-weight: 800; font-size: 12px; line-height: 1; letter-spacing: 0.02em;
+        color: #fff; text-transform: lowercase;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 48%),
+          linear-gradient(135deg, #6b8cef 0%, #4a6bc9 100%);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
       }
       #lsb-panel .lsb-hdr-text {
         display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
@@ -1272,6 +1339,12 @@
         flex-shrink: 0; background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
         object-fit: cover;
         box-shadow: 0 4px 12px rgba(107, 140, 239, 0.2);
+      }
+      #lsb-panel .lsb-avatar-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: 16px; color: #fff;
+        background: linear-gradient(135deg, var(--lsb-accent, #6b8cef), #8aa4f4);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
       }
       #lsb-panel .lsb-user-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
       #lsb-panel .lsb-user-name {
@@ -1473,7 +1546,7 @@
     root.dataset.theme = LSB.panelStyle ? LSB.panelStyle.theme : "auto";
         root.innerHTML = `
       <div class="lsb-hdr lsb-compact" data-lsb="compact">
-        <img class="lsb-site-icon" src="https://linux.sb/app/assets/index.svg" alt="linux.sb" data-lsb="site-icon" />
+        <span class="lsb-site-icon lsb-site-icon-badge" data-lsb="site-icon" title="linux.sb">sb</span>
         <div class="lsb-hdr-text">
           <span class="lsb-title">linux.sb 助手</span>
           <span class="lsb-ver">v<span data-lsb="version">0.0.0</span></span>
@@ -1534,21 +1607,8 @@
     // demand because it is re-created on re-render.
     const refs = (typeof collectRefs === "function") ? collectRefs(root) : {};
     const $ = (key) => refs[key] || root.querySelector(`[data-lsb="${key}"]`);
-    // Header site icon: if the SVG fails to load (404 / blocked / offline),
-    // swap in a letter badge so the top bar never shows a broken image.
-    const siteIcon = $("site-icon");
-    const siteIconBadge = () => {
-      if (!siteIcon || siteIcon.dataset.fallbackApplied) return;
-      siteIcon.dataset.fallbackApplied = "1";
-      const badge = document.createElement("span");
-      badge.className = "lsb-site-icon lsb-site-icon-fallback";
-      badge.textContent = "SB";
-      siteIcon.replaceWith(badge);
-    };
-    if (siteIcon) {
-      if (siteIcon.complete && siteIcon.naturalWidth === 0) siteIconBadge();
-      else siteIcon.addEventListener("error", siteIconBadge, { once: true });
-    }
+    // The header site icon is a designed monogram badge (a <span>), so no
+    // remote image can break — the top bar always looks sharp.
     const dot = $("dot");
     const nameEl = $("name");
     const avatarEl = $("avatar");
@@ -1561,13 +1621,37 @@
     const gear = $("gear");
     versionEl.textContent = LSB.version; // template already renders the "v" prefix
 
-    // Clicking the avatar opens the profile (the footer link was removed for
-    // a cleaner footer).
-    avatarEl.addEventListener("click", (ev) => {
+    // Restore the persisted panel open/close state (LDStatus Panel borrow).
+    try { if (LSB.storage.get("panel.open")) root.classList.add("lsb-open"); } catch (e) { /* ignore */ }
+
+    // Clicking the avatar (or its initials badge) opens the profile.
+    function openProfile(ev) {
       ev.stopPropagation();
       const url = avatarEl.dataset.profileUrl;
       if (url) window.open(url, "_blank", "noopener");
-    });
+    }
+    avatarEl.addEventListener("click", openProfile);
+
+    // When the user has no real photo the site serves a DiceBear robot with a
+    // full-canvas grey background — swap it for a designed initials badge so
+    // the top area never shows a grey blob. Real photos stay as the <img>.
+    let avatarBadgeEl = null;
+    function syncAvatarBadge(u) {
+      const showBadge = !!u && !!u.isLoggedIn && (u.avatarIsDicebear || !u.avatarUrl);
+      if (showBadge) {
+        avatarEl.hidden = true;
+        if (!avatarBadgeEl) {
+          avatarBadgeEl = document.createElement("span");
+          avatarBadgeEl.className = "lsb-avatar lsb-avatar-badge";
+          avatarBadgeEl.addEventListener("click", openProfile);
+          avatarEl.parentNode.insertBefore(avatarBadgeEl, avatarEl);
+        }
+        avatarBadgeEl.textContent = ((u.nickname || "?").trim().charAt(0) || "?").toUpperCase();
+      } else {
+        avatarEl.hidden = false;
+        if (avatarBadgeEl) { avatarBadgeEl.remove(); avatarBadgeEl = null; }
+      }
+    }
 
     function isLoggedIn() {
       return !!(user && user.info && user.info.id);
@@ -1715,7 +1799,7 @@
     // Gear switches to the Settings tab (LDStatus-style tabs, no popover).
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      root.classList.add("lsb-open");
+      setOpen(true);
       activateTab("settings");
       renderSettings();
     });
@@ -1744,11 +1828,17 @@
       log_user.info("auto-signin toggled", next);
     });
 
+    // Persisted open/close state: the panel remembers whether it was expanded.
+    function setOpen(open) {
+      root.classList.toggle("lsb-open", open);
+      try { LSB.storage.set("panel.open", !!open, 0); } catch (e) { /* ignore */ }
+    }
+
     // Compact / popover toggle. Header buttons (refresh/gear) and the notif
     // badge handle their own clicks; anything else in the header toggles.
     $("compact").addEventListener("click", (ev) => {
       if (ev.target.closest("button") || ev.target.closest(".lsb-notif-dot")) return;
-      root.classList.toggle("lsb-open");
+      setOpen(!root.classList.contains("lsb-open"));
     });
     // Header refresh button.
     const refreshBtn = $("refresh");
@@ -1771,7 +1861,7 @@
     document.addEventListener("click", (ev) => {
       if (!root.classList.contains("lsb-open")) return;
       if (root.contains(ev.target)) return;
-      root.classList.remove("lsb-open");
+      setOpen(false);
     });
 
     signinBtn.addEventListener("click", async () => {
@@ -1832,7 +1922,8 @@
         $("rank-row").hidden = true;
         return;
       }
-      if (u.avatarUrl) avatarEl.src = u.avatarUrl;
+      if (u.avatarUrl && !u.avatarIsDicebear) avatarEl.src = u.avatarUrl;
+      syncAvatarBadge(u);
       nameEl.textContent = u.nickname || `用户 #${u.id}`;
       if (u.profileUrl) avatarEl.dataset.profileUrl = u.profileUrl;
 
@@ -1901,6 +1992,14 @@
     // publishers (panelStyle, notif) emit their boot events.
     for (const [name, entry] of _registry) {
       if (!entry.enabled || !entry.instance || typeof entry.instance.init !== "function") continue;
+      // Optional match(ctx) gate (nodeseek borrow): skip init when it returns false.
+      if (entry.match) {
+        try {
+          const userInst = _registry.get("user") ? _registry.get("user").instance : null;
+          const ctx = { config: LSB.config, href: location.href, user: (userInst && userInst.info) || null };
+          if (!entry.match(ctx)) continue;
+        } catch (err) { (LSB.logger.make("register")).warn("match threw for", name, err); }
+      }
       try { entry.instance.init(); }
       catch (err) { (LSB.logger.make("register")).error("init failed:", name, err); }
     }
