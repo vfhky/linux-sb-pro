@@ -1014,6 +1014,7 @@
     if (LSB.sections) {
       LSB.sections.register("notif", {
         order: 0,
+        pane: "notif",
         hidden: () => !isLoggedIn(),
         render: () => ({
           innerHTML:
@@ -1125,6 +1126,7 @@
     if (LSB.sections) {
       LSB.sections.register("history", {
         order: 1,
+        pane: "history",
         hidden: () => store.list().length === 0,
         render: () => {
           const items = store.list().slice(0, 8);
@@ -1261,7 +1263,7 @@
         height: 100%; min-height: 0; background: none;
       }
       #lsb-panel:not(.lsb-open) .lsb-hdr-text,
-      #lsb-panel:not(.lsb-open) .lsb-hdr-actions,
+      #lsb-panel:not(.lsb-open) .lsb-hdr-btns,
       #lsb-panel:not(.lsb-open) .lsb-chevron,
       #lsb-panel:not(.lsb-open) .lsb-notif-dot { display: none; }
       #lsb-panel:not(.lsb-open) .lsb-site-icon {
@@ -1318,14 +1320,21 @@
         -webkit-text-fill-color: transparent; color: transparent;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; max-width: 100%;
       }
-      #lsb-panel .lsb-ver {
-        font-size: 9px; font-weight: 600; letter-spacing: 0.04em; color: #fff;
-        background: rgba(255, 255, 255, 0.18);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        padding: 1px 8px; border-radius: 999px;
-        line-height: 1.5; display: inline-flex; align-items: center; gap: 3px;
-        backdrop-filter: blur(4px);
+      /* animated gradient app name (LDStatus .ldsp-app-name) */
+      #lsb-panel .lsb-app-name {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+        background: linear-gradient(90deg, #a8c0f8, #7a9eef, #7cc9bc, #7a9eef, #a8c0f8);
+        background-size: 200% auto;
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; color: transparent;
+        animation: lsb-gradient-shift 6s ease infinite;
       }
+      @keyframes lsb-gradient-shift {
+        0% { background-position: 0% center; }
+        50% { background-position: 100% center; }
+        100% { background-position: 0% center; }
+      }
+      #lsb-panel .lsb-ver { display: inline-flex; line-height: 1.3; }
       #lsb-panel .lsb-dot {
         width: 10px; height: 10px; border-radius: 50%;
         background: rgba(255, 255, 255, 0.7); flex: none; position: relative; z-index: 1;
@@ -1340,7 +1349,11 @@
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.45; transform: scale(0.75); }
       }
-      #lsb-panel .lsb-hdr-actions { display: flex; align-items: center; gap: 7px; position: relative; z-index: 1; }
+      #lsb-panel .lsb-hdr-info { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; position: relative; z-index: 1; }
+      /* site icon + version stacked (LDStatus .ldsp-site-wrap) */
+      #lsb-panel .lsb-site-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0; }
+      #lsb-panel .lsb-site-ver { font-size: 8px; font-weight: 700; color: #fff; text-align: center; background: rgba(0, 0, 0, 0.28); padding: 1px 5px; border-radius: 5px; letter-spacing: 0.02em; }
+      #lsb-panel .lsb-hdr-btns { display: flex; align-items: center; gap: 7px; position: relative; z-index: 1; }
       #lsb-panel .lsb-hdr-btn {
         width: 30px; height: 30px; border-radius: 10px;
         display: flex; align-items: center; justify-content: center;
@@ -1400,7 +1413,7 @@
       /* ================= user card: hero ================= */
       #lsb-panel .lsb-user {
         position: relative; z-index: 1;
-        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(76px, 92px); align-items: stretch; gap: 12px;
         padding: 16px;
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 60%), var(--lsb-bg-card, rgba(22, 26, 38, 0.85));
         border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
@@ -1409,7 +1422,9 @@
         content: ""; position: absolute; top: 0; left: 16px; right: 16px; height: 1px;
         background: linear-gradient(90deg, transparent, rgba(107, 140, 239, 0.55), transparent);
       }
-      #lsb-panel .lsb-user-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      #lsb-panel .lsb-user-left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+      #lsb-panel .lsb-user-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      #lsb-panel .lsb-user-status { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
       /* gradient-ring avatar frame */
       #lsb-panel .lsb-avatar-frame {
         width: 48px; height: 48px; border-radius: 16px; flex-shrink: 0;
@@ -1437,7 +1452,19 @@
         font-size: 11px; color: var(--lsb-fg-mut, #5d6275);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
-      #lsb-panel .lsb-signin-hero { flex-shrink: 0; }
+      /* stats card (LDStatus .ldsp-reading slot): check-in streak */
+      #lsb-panel .lsb-stats {
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        padding: 10px 8px; border-radius: 14px; align-self: stretch; min-width: 76px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 100%);
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.08));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        position: relative; overflow: hidden;
+      }
+      #lsb-panel .lsb-stats::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(107, 140, 239, 0.12), transparent 70%); }
+      #lsb-panel .lsb-stats-icon { font-size: 18px; line-height: 1; margin-bottom: 4px; position: relative; }
+      #lsb-panel .lsb-stats-num { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; position: relative; }
+      #lsb-panel .lsb-stats-label { font-size: 9px; color: var(--lsb-fg-mut, #5d6275); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; position: relative; }
       #lsb-panel .lsb-hero-signed {
         display: inline-flex; align-items: center; gap: 5px;
         font-size: 12px; font-weight: 700; color: var(--lsb-ok, #5bb5a6);
@@ -1564,12 +1591,50 @@
         to { opacity: 1; transform: none; }
       }
 
-      /* ================= settings ================= */
+      /* ================= settings dropdown (LDStatus .ldsp-settings-menu) ================= */
+      #lsb-panel .lsb-settings-menu {
+        position: absolute; top: 100%; left: 8px; right: 8px; z-index: 30;
+        padding: 8px;
+        background: var(--lsb-bg-card, rgba(24, 26, 36, 0.97));
+        border: 1px solid var(--lsb-border2, rgba(255, 255, 255, 0.1));
+        border-radius: 14px;
+        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        opacity: 0; pointer-events: none;
+        transform: translateY(-8px) scale(0.98);
+        transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+        backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      }
+      #lsb-panel.settings-open .lsb-settings-menu { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+      #lsb-panel .lsb-settings-head { display: flex; align-items: center; padding: 4px 6px 8px; border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06)); margin-bottom: 8px; }
+      #lsb-panel .lsb-settings-head-title { font-size: 12px; font-weight: 700; }
+      #lsb-panel .lsb-settings-nav {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        width: 100%; padding: 9px 10px; margin-bottom: 6px;
+        border: 1px solid transparent; border-radius: 10px;
+        background: var(--lsb-bg-el, rgba(32, 35, 48, 0.8));
+        font-size: 11px; text-align: left; cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, transform 0.15s;
+      }
+      #lsb-panel .lsb-settings-nav:hover { background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95)); border-color: var(--lsb-border2, rgba(255, 255, 255, 0.1)); transform: translateY(-1px); }
+      #lsb-panel .lsb-settings-nav-main { display: flex; align-items: center; gap: 8px; font-weight: 600; min-width: 0; }
+      #lsb-panel .lsb-settings-nav-value { font-size: 10px; color: var(--lsb-fg-mut, #5d6275); }
+      #lsb-panel .lsb-settings-nav-arrow { font-size: 13px; color: var(--lsb-fg-mut, #5d6275); }
+      #lsb-panel .lsb-settings-sub { display: none; padding: 2px 2px 6px; }
+      #lsb-panel .lsb-settings-sub.show { display: block; animation: lsb-enter 0.18s var(--ease-out); }
+      #lsb-panel .lsb-settings-toggle {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 9px 10px; margin-top: 6px; border-radius: 10px;
+        background: var(--lsb-bg-el, rgba(32, 35, 48, 0.8)); border: 1px solid transparent;
+        font-size: 11px; transition: background 0.15s, border-color 0.15s;
+      }
+      #lsb-panel .lsb-settings-toggle:hover { background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95)); border-color: var(--lsb-border2, rgba(255, 255, 255, 0.1)); }
+      #lsb-panel .lsb-settings-toggle-main { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+      /* the settings host inside the dropdown (theme segments) */
       #lsb-panel .lsb-settings {
-        padding: 14px 16px;
-        background: var(--lsb-bg-card, rgba(24, 26, 36, 0.8));
+        padding: 2px 2px 8px;
         max-height: 240px;
         overflow-y: auto;
+        background: none;
       }
       #lsb-panel .lsb-settings[hidden] { display: none !important; }
       #lsb-panel .lsb-settings h4 {
@@ -1678,30 +1743,64 @@
         root.innerHTML = `
       <div class="lsb-glow" aria-hidden="true"></div>
       <div class="lsb-hdr lsb-compact" data-lsb="compact">
-        <img class="lsb-site-icon" src="https://linux.sb/app/assets/index.svg" alt="linux.sb" data-lsb="site-icon" />
-        <div class="lsb-hdr-text">
-          <span class="lsb-title">linux.sb 助手</span>
-          <span class="lsb-ver">v<span data-lsb="version">0.0.0</span></span>
+        <div class="lsb-hdr-info">
+          <div class="lsb-site-wrap">
+            <img class="lsb-site-icon" src="https://linux.sb/app/assets/index.svg" alt="linux.sb" data-lsb="site-icon" />
+            <span class="lsb-site-ver">v<span data-lsb="version">0.0.0</span></span>
+          </div>
+          <div class="lsb-hdr-text">
+            <span class="lsb-title">linux.sb 助手</span>
+            <span class="lsb-ver"><span class="lsb-app-name">linux.sb Suite</span></span>
+          </div>
         </div>
         <span class="lsb-dot lsb-loading" data-lsb="dot" title="载入中"></span>
-        <div class="lsb-hdr-actions">
-          <button type="button" class="lsb-hdr-btn" data-lsb="refresh" title="刷新"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
-          <button type="button" class="lsb-hdr-btn" data-lsb="gear" title="${LSB.i18n.t("panel.settings")}"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <div class="lsb-hdr-btns">
+          <button type="button" class="lsb-hdr-btn" data-lsb="refresh" title="刷新"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+          <button type="button" class="lsb-hdr-btn" data-lsb="gear" title="${LSB.i18n.t("panel.settings")}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
         </div>
         <span class="lsb-chevron"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
+      <div class="lsb-settings-menu" aria-hidden="true">
+        <div class="lsb-settings-head">
+          <span class="lsb-settings-head-title">${LSB.i18n.t("panel.settings")}</span>
+        </div>
+        <div class="lsb-settings-body">
+          <div class="lsb-settings-nav" data-settings-nav="theme">
+            <span class="lsb-settings-nav-main">🎨 ${LSB.i18n.t("panel.theme")}</span>
+            <span class="lsb-settings-nav-value" data-lsb="theme-value">--</span>
+            <span class="lsb-settings-nav-arrow">›</span>
+          </div>
+          <div class="lsb-settings-sub" data-settings-sub="theme">
+            <div class="lsb-settings" data-lsb="settings"></div>
+          </div>
+          <div class="lsb-settings-toggle">
+            <span class="lsb-settings-toggle-main">⚡ ${LSB.i18n.t("signin.auto")}</span>
+            <label class="lsb-switch">
+              <input type="checkbox" data-lsb="auto" />
+              <span class="lsb-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
       <div class="lsb-details">
         <div class="lsb-user" data-lsb="rank-row">
-          <div class="lsb-user-main">
-            <span class="lsb-avatar-frame"><img class="lsb-avatar" data-lsb="avatar" alt="" /></span>
-            <div class="lsb-user-info">
-              <span class="lsb-user-name" data-lsb="name">…</span>
-              <span class="lsb-user-meta" data-lsb="meta">—</span>
+          <div class="lsb-user-left">
+            <div class="lsb-user-row">
+              <span class="lsb-avatar-frame"><img class="lsb-avatar" data-lsb="avatar" alt="" /></span>
+              <div class="lsb-user-info">
+                <span class="lsb-user-name" data-lsb="name">…</span>
+                <span class="lsb-user-meta" data-lsb="meta">—</span>
+              </div>
+            </div>
+            <div class="lsb-user-status">
+              <span data-lsb="signin-text" class="lsb-hero-signed" hidden>✓ ${LSB.i18n.t("signin.status.signed")}</span>
+              <button type="button" class="lsb-hero-btn" data-lsb="signin" hidden>签到</button>
             </div>
           </div>
-          <div class="lsb-signin-hero">
-            <span data-lsb="signin-text" class="lsb-hero-signed" hidden>✓ ${LSB.i18n.t("signin.status.signed")}</span>
-            <button type="button" class="lsb-hero-btn" data-lsb="signin" hidden>签到</button>
+          <div class="lsb-stats" data-lsb="stats">
+            <span class="lsb-stats-icon">📅</span>
+            <span class="lsb-stats-num" data-lsb="stats-streak">--</span>
+            <span class="lsb-stats-label">连续签到</span>
           </div>
         </div>
         <div class="lsb-tabs" data-lsb="tabs">
@@ -1710,24 +1809,17 @@
             <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
             ${LSB.i18n.t("notif.title")}
           </button>
-          <button type="button" class="lsb-tab" data-lsb-tab="settings">
-            <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
-            ${LSB.i18n.t("panel.settings")}
+          <button type="button" class="lsb-tab" data-lsb-tab="history">
+            <span class="lsb-tab-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            ${LSB.i18n.t("history.title")}
           </button>
         </div>
         <div class="lsb-content">
           <div class="lsb-pane active" data-lsb-pane="notif">
             <div class="lsb-sections" data-lsb="sections"></div>
           </div>
-          <div class="lsb-pane" data-lsb-pane="settings">
-            <div class="lsb-settings" data-lsb="settings"></div>
-            <div class="lsb-action">
-              <span class="lsb-label">${LSB.i18n.t("signin.auto")}</span>
-              <label class="lsb-switch">
-                <input type="checkbox" data-lsb="auto" />
-                <span class="lsb-slider"></span>
-              </label>
-            </div>
+          <div class="lsb-pane" data-lsb-pane="history">
+            <div class="lsb-sections" data-lsb="sections-history"></div>
           </div>
         </div>
       </div>
@@ -1775,8 +1867,15 @@
     // own section (e.g. notif) and the host fills them in.
     function rerenderSections() {
       if (!LSB.sections) return;
-      const out = LSB.sections.render({ isLoggedIn: isLoggedIn() });
+      // Notifications pane: notif-scoped sections.
+      const out = LSB.sections.render({ isLoggedIn: isLoggedIn(), pane: "notif" });
       sectionsHost.innerHTML = out.innerHTML;
+      // History pane: history-scoped sections.
+      const histHost = $("sections-history");
+      if (histHost) {
+        const outHist = LSB.sections.render({ isLoggedIn: isLoggedIn(), pane: "history" });
+        histHost.innerHTML = outHist.innerHTML;
+      }
     }
 
     // Apply the panel position + theme.  Reads from LSB.panelStyle
@@ -1899,6 +1998,11 @@
         }
       }
       settingsHost.innerHTML = html.join("");
+      const tv = $("theme-value");
+      if (tv && LSB.panelStyle) {
+        const label = ({ auto: "跟随系统", light: "浅色", dark: "深色" })[LSB.panelStyle.theme] || LSB.panelStyle.theme;
+        tv.textContent = label;
+      }
     }
     settingsHost.addEventListener("change", (ev) => {
       const el = ev.target.closest("[data-lsb-setting]");
@@ -1914,8 +2018,14 @@
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
       setOpen(true);
-      activateTab("settings");
       renderSettings();
+      root.classList.toggle("settings-open");
+    });
+    // LDStatus-style dropdown: the theme nav row toggles its sub-view.
+    const themeNav = root.querySelector('[data-settings-nav="theme"]');
+    if (themeNav) themeNav.addEventListener("click", () => {
+      const sub = root.querySelector('[data-settings-sub="theme"]');
+      if (sub) sub.classList.toggle("show");
     });
     // Tab switching (LDStatus .ldsp-tabs with a sliding indicator).
     function updateTabIndicator() {
@@ -1987,6 +2097,7 @@
       if (!root.classList.contains("lsb-open")) return;
       if (root.contains(ev.target)) return;
       setOpen(false);
+      root.classList.remove("settings-open");
     });
 
     signinBtn.addEventListener("click", async () => {
@@ -2066,6 +2177,9 @@
         dot.title = _signinLabel(s.status);
         const isSigned = s.status === "signed-in";
         const isPending = s.status === "not-signed-in";
+        // Stats card (LDStatus .ldsp-reading slot): check-in streak.
+        const streakEl = $("stats-streak");
+        if (streakEl) streakEl.textContent = (s.stats && s.stats.streak) ? String(s.stats.streak) : "--";
         // Sign-in hero in the user card.
         if (signinText) signinText.hidden = !isSigned;
         signinBtn.hidden = !isPending;

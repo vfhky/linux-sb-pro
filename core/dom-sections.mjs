@@ -9,13 +9,21 @@ export function createSectionRegistry() {
     if (!name || typeof def !== "object" || typeof def.render !== "function") {
       throw new Error("dom-sections: bad def for " + name);
     }
-    sections.set(name, { order: def.order || 0, render: def.render, hidden: def.hidden || (() => false) });
+    sections.set(name, {
+      order: def.order || 0,
+      render: def.render,
+      hidden: def.hidden || (() => false),
+      pane: def.pane || null, // optional pane name; render() filters by ctx.pane
+    });
   }
   function unregister(name) { sections.delete(name); }
   function list() { return Array.from(sections.entries()).sort((a, b) => a[1].order - b[1].order); }
   function render(ctx) {
+    const pane = ctx && ctx.pane ? ctx.pane : null;
     let innerHTML = "";
     for (const [, def] of list()) {
+      // pane-scoped sections only render into their pane's host.
+      if (pane && def.pane && def.pane !== pane) continue;
       if (def.hidden(ctx)) continue;
       const r = def.render(ctx);
       if (r && r.innerHTML != null) innerHTML += r.innerHTML;
