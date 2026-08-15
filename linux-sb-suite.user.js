@@ -356,6 +356,22 @@
     ? createToastManager({ maxVisible: 3, gap: 8, durationMs: 3000, containerId: 'lsb-toast-container' })
     : { show: function() {}, dismiss: function() {}, destroy: function() {} };
 
+  // Multi-tab leader election (inlined from lib/tab-leader.mjs): only the
+  // leader tab runs pollers, so N open tabs on linux.sb don't duplicate
+  // notification / auto-signin requests. localStorage is per-origin and
+  // shared across tabs; nothing leaves the browser.
+  LSB.tabLeader = (typeof createTabLeader === "function")
+    ? createTabLeader({
+        storage: {
+          get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+          set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
+          remove: (k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+        },
+        addEventListener: (t, fn) => window.addEventListener(t, fn),
+        removeEventListener: (t, fn) => window.removeEventListener(t, fn),
+      }).start()
+    : null;
+
     LSB.api = LSB.api || {};
   LSB.api.linuxSb = {
     isHome(href) {
@@ -574,15 +590,26 @@
         // Persist a normalized version.
         const normalized = normalize(fromDom);
         LSB.storage.set("user.current", normalized, LSB.config.storage.defaultTTL);
+        // Publish _info BEFORE emitting so listeners (notif, signin) see the
+        // fresh user.info synchronously inside their user:changed handlers.
+        _info = normalized;
         const key = JSON.stringify(normalized);
         if (key !== _lastEmittedKey) {
           _lastEmittedKey = key;
           events.emit("user:changed", normalized);
         }
-        _info = normalized;
         return normalized;
       }
-      if (cached) { _info = cached; return cached; }
+      if (cached) {
+        _info = cached;
+        // Also announce cached reads (DOM-less pages) so notif/signin start.
+        const ck = JSON.stringify(cached);
+        if (ck !== _lastEmittedKey) {
+          _lastEmittedKey = ck;
+          events.emit("user:changed", cached);
+        }
+        return cached;
+      }
       // Last resort: nothing on the page yet. Return null and let caller decide.
       _info = null;
       return null;
@@ -773,6 +800,7 @@
         intervalMs: 5 * 60_000,
         backoffAfter: 2,
         backoffMs: 30 * 60_000,
+        leader: LSB.tabLeader,
       });
     }
 
@@ -928,7 +956,7 @@
 
     function start() {
       if (poller) return;
-      poller = makePoller({ name: "notif", onTick: refresh, intervalMs: config.notif.intervalMs, backoffAfter: config.notif.backoffAfter, backoffMs: config.notif.backoffMs });
+      poller = makePoller({ name: "notif", onTick: refresh, intervalMs: config.notif.intervalMs, backoffAfter: config.notif.backoffAfter, backoffMs: config.notif.backoffMs, leader: LSB.tabLeader });
       poller.start();
       log.info("started");
     }
@@ -1113,8 +1141,9 @@
           transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.38s;
       }
       #lsb-panel.lsb-open .lsb-details {
-        max-height: 520px; opacity: 1; visibility: visible;
+        max-height: min(680px, 85vh); opacity: 1; visibility: visible;
         transform: translateY(0);
+        overflow-y: auto;
         transition: max-height 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease,
           transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
       }
@@ -1518,6 +1547,9 @@
     });
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      // Opening the settings implies showing the panel (the settings host
+      // lives inside the collapsed-by-default details area).
+      root.classList.add("lsb-open");
       renderSettings();
       settingsHost.hidden = false;
     });

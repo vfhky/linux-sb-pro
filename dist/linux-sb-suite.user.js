@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         linux.sb 助手 / linux.sb Suite
 // @namespace    https://github.com/vfhky/linux-sb-pro
-// @version      1.1.9
+// @version      1.2.0
 // @description  为 linux.sb (linux.bi) 论坛开发的 Tampermonkey 油猴脚本。在页面右下角显示登录用户信息、未读消息、每日签到状态，支持一键签到、自动签到以及面板位置/主题设置。模块化核心 (logger/storage/events/http/dom/i18n/settings/poller/palettes/css/sections) + 可扩展 UI 架构。 | linux.sb Suite: floating panel with notifications, check-in, auto sign-in, panel position/theme, settings popover.
 // @downloadURL https://update.greasyfork.org/scripts/590905.user.js
 // @updateURL   https://update.greasyfork.org/scripts/590905.meta.js
@@ -22,7 +22,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-15T03:26:53.023Z
+ * built: 2026-08-15T03:46:14.750Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -234,8 +234,10 @@ function getPalette(name) {
 ;
 // Generic poller: tick at a fixed interval while the document is visible,
 // with an optional backoff after N consecutive errors.  Inject the
-// `document` object so tests can run without a real DOM.
-function makePoller({ name, onTick, intervalMs = 60_000, backoffAfter = 3, backoffMs = 5 * 60_000, document: doc = (typeof document !== "undefined" ? document : null) } = {}) {
+// `document` object so tests can run without a real DOM.  An optional
+// `leader` gate ({ isLeader() }) makes only the leader tab tick, which
+// pairs with lib/tab-leader.mjs for multi-tab coordination.
+function makePoller({ name, onTick, intervalMs = 60_000, backoffAfter = 3, backoffMs = 5 * 60_000, leader = null, document: doc = (typeof document !== "undefined" ? document : null) } = {}) {
   if (typeof onTick !== "function") throw new Error("makePoller: onTick must be a function");
   if (!(intervalMs > 0)) throw new Error("makePoller: intervalMs must be > 0");
   if (!name) throw new Error("makePoller: name required");
@@ -261,6 +263,8 @@ function makePoller({ name, onTick, intervalMs = 60_000, backoffAfter = 3, backo
   async function runOnce() {
     if (poller.state !== "running") return;
     if (doc && doc.hidden) { schedule(); return; }
+    // Multi-tab gate: only the leader tab ticks; followers just reschedule.
+    if (leader && typeof leader.isLeader === "function" && !leader.isLeader()) { schedule(); return; }
     if (runningTick) { schedule(); return; }
     runningTick = true;
     try {
@@ -771,6 +775,112 @@ function makeStore(gm, prefix) {
 }
 
 ;
+// Multi-tab leader election (localStorage heartbeat + takeover + release).
+// Only the leader tab runs pollers, so N open tabs on the same origin do
+// not duplicate network requests.
+//
+// Design borrowed from LDStatus Pro (verified against its source): every tab
+// writes a heartbeat { tabId, ts } under one key; a tab becomes leader when
+// the stored entry is stale (timeoutMs) or is its own id. beforeunload
+// releases the entry so takeover is instant; storage events + the heartbeat
+// timer keep the rest in sync.
+//
+// Pure: the storage adapter and event listeners are injected so tests can
+// simulate multiple tabs with a shared Map-backed stub.
+
+function createTabLeader(opts = {}) {
+  const {
+    storage,
+    key = "lsb:tab-leader",
+    heartbeatMs = 5000,
+    timeoutMs = 10000,
+    tabId = null,
+    now = Date.now,
+    addEventListener = null,
+    removeEventListener = null,
+  } = opts;
+  if (!storage || typeof storage.get !== "function" || typeof storage.set !== "function" || typeof storage.remove !== "function") {
+    throw new Error("tab-leader: storage adapter with get/set/remove required");
+  }
+
+  const id = tabId || (Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
+  let isLeaderFlag = false;
+  let heartbeatTimer = null;
+  let storageHandler = null;
+  let unloadHandler = null;
+  const listeners = new Set();
+
+  function emit(change) {
+    for (const fn of listeners) {
+      try { fn(change); } catch (e) { /* ignore listener errors */ }
+    }
+  }
+
+  function read() {
+    try {
+      const raw = storage.get(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function write(entry) { try { storage.set(key, JSON.stringify(entry)); } catch { /* quota/private mode */ } }
+
+  function tryBecomeLeader() {
+    const stored = read();
+    const expired = !stored || !stored.ts || (now() - stored.ts) > timeoutMs;
+    const mine = stored && stored.tabId === id;
+    if (expired || mine) {
+      write({ tabId: id, ts: now() });
+      // Verify after write: a simultaneous writer may have won the race.
+      const after = read();
+      if (!after || after.tabId === id) {
+        if (!isLeaderFlag) { isLeaderFlag = true; emit({ isLeader: true, tabId: id }); }
+        return;
+      }
+    }
+    if (isLeaderFlag) { isLeaderFlag = false; emit({ isLeader: false, tabId: id }); }
+  }
+
+  function release() {
+    const stored = read();
+    if (isLeaderFlag && stored && stored.tabId === id) {
+      try { storage.remove(key); } catch { /* ignore */ }
+      isLeaderFlag = false;
+    }
+  }
+
+  return {
+    get tabId() { return id; },
+    isLeader() { return isLeaderFlag; },
+    start() {
+      tryBecomeLeader();
+      if (!heartbeatTimer) heartbeatTimer = setInterval(tryBecomeLeader, heartbeatMs);
+      if (addEventListener && !storageHandler) {
+        storageHandler = (e) => { if (!e || e.key === key || e.key === null) tryBecomeLeader(); };
+        addEventListener("storage", storageHandler);
+        unloadHandler = () => release();
+        addEventListener("beforeunload", unloadHandler);
+      }
+      return this;
+    },
+    stop() {
+      if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+      if (removeEventListener) {
+        if (storageHandler) removeEventListener("storage", storageHandler);
+        if (unloadHandler) removeEventListener("beforeunload", unloadHandler);
+      }
+      storageHandler = null;
+      unloadHandler = null;
+      return this;
+    },
+    on(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+  };
+}
+
+;
 // lib/toast.mjs
 // Pure factory function for toast notifications. Zero external dependencies.
 // Inlined into the public build by build.mjs.
@@ -991,7 +1101,7 @@ function _userIdFromHref(href) {
   return m ? Number(m[1]) : null;
 }
 ;if (root.LSB && root.LSB.__booted) return;
-  const LSB = (root.LSB = { __booted: true, version: "1.1.9" });
+  const LSB = (root.LSB = { __booted: true, version: "1.2.0" });
 
   // =====================================================================
   // core/config
@@ -1284,6 +1394,22 @@ function _userIdFromHref(href) {
     ? createToastManager({ maxVisible: 3, gap: 8, durationMs: 3000, containerId: 'lsb-toast-container' })
     : { show: function() {}, dismiss: function() {}, destroy: function() {} };
 
+  // Multi-tab leader election (inlined from lib/tab-leader.mjs): only the
+  // leader tab runs pollers, so N open tabs on linux.sb don't duplicate
+  // notification / auto-signin requests. localStorage is per-origin and
+  // shared across tabs; nothing leaves the browser.
+  LSB.tabLeader = (typeof createTabLeader === "function")
+    ? createTabLeader({
+        storage: {
+          get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+          set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
+          remove: (k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+        },
+        addEventListener: (t, fn) => window.addEventListener(t, fn),
+        removeEventListener: (t, fn) => window.removeEventListener(t, fn),
+      }).start()
+    : null;
+
     LSB.api = LSB.api || {};
   LSB.api.linuxSb = {
     isHome(href) {
@@ -1502,15 +1628,26 @@ function _userIdFromHref(href) {
         // Persist a normalized version.
         const normalized = normalize(fromDom);
         LSB.storage.set("user.current", normalized, LSB.config.storage.defaultTTL);
+        // Publish _info BEFORE emitting so listeners (notif, signin) see the
+        // fresh user.info synchronously inside their user:changed handlers.
+        _info = normalized;
         const key = JSON.stringify(normalized);
         if (key !== _lastEmittedKey) {
           _lastEmittedKey = key;
           events.emit("user:changed", normalized);
         }
-        _info = normalized;
         return normalized;
       }
-      if (cached) { _info = cached; return cached; }
+      if (cached) {
+        _info = cached;
+        // Also announce cached reads (DOM-less pages) so notif/signin start.
+        const ck = JSON.stringify(cached);
+        if (ck !== _lastEmittedKey) {
+          _lastEmittedKey = ck;
+          events.emit("user:changed", cached);
+        }
+        return cached;
+      }
       // Last resort: nothing on the page yet. Return null and let caller decide.
       _info = null;
       return null;
@@ -1701,6 +1838,7 @@ function _userIdFromHref(href) {
         intervalMs: 5 * 60_000,
         backoffAfter: 2,
         backoffMs: 30 * 60_000,
+        leader: LSB.tabLeader,
       });
     }
 
@@ -1856,7 +1994,7 @@ function _userIdFromHref(href) {
 
     function start() {
       if (poller) return;
-      poller = makePoller({ name: "notif", onTick: refresh, intervalMs: config.notif.intervalMs, backoffAfter: config.notif.backoffAfter, backoffMs: config.notif.backoffMs });
+      poller = makePoller({ name: "notif", onTick: refresh, intervalMs: config.notif.intervalMs, backoffAfter: config.notif.backoffAfter, backoffMs: config.notif.backoffMs, leader: LSB.tabLeader });
       poller.start();
       log.info("started");
     }
@@ -2041,8 +2179,9 @@ function _userIdFromHref(href) {
           transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.38s;
       }
       #lsb-panel.lsb-open .lsb-details {
-        max-height: 520px; opacity: 1; visibility: visible;
+        max-height: min(680px, 85vh); opacity: 1; visibility: visible;
         transform: translateY(0);
+        overflow-y: auto;
         transition: max-height 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease,
           transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
       }
@@ -2446,6 +2585,9 @@ function _userIdFromHref(href) {
     });
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      // Opening the settings implies showing the panel (the settings host
+      // lives inside the collapsed-by-default details area).
+      root.classList.add("lsb-open");
       renderSettings();
       settingsHost.hidden = false;
     });

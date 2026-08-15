@@ -34,6 +34,7 @@ otif-unread-count reliance; new layout uses item list length as the unread count
 
 - No data leaves your browser except ordinary requests to `linux.sb` initiated by the script itself (the daily check-in POST and the notification poll).
 - `GM_setValue` is used to remember your settings (position, theme, auto-signin) and a cached copy of your user info. These are stored locally by Tampermonkey and never sent anywhere.
+- `localStorage` (per-origin, never leaves the browser) carries a short-lived `lsb:tab-leader` heartbeat so multiple open tabs pick a single polling leader.
 - The script does not inject into iframes, does not touch any page outside `linux.sb` / `www.linux.bi`, and does not load any third-party resources at runtime.
 - No mutation actions (mark-as-read, follow, like). The script is strictly read-only with respect to linux.sb to stay within Greasy Fork's policy.
 
@@ -47,9 +48,10 @@ LSB  (root namespace, the only global)
  +-- api/    linuxSb  (selectors, URL patterns, response shape)
  +-- modules/   user, signin, panelStyle, notif, ui, debug
  +-- lib/    pure ESM, inlined into the public build by build.mjs
+ +-- tabLeader  multi-tab leader election (localStorage heartbeat)
 ```
 
-`core/settings` is the registry every module writes through — adding a new setting is one `LSB.settings.register({...})` call; the popover inside the panel renders the controls automatically. `core/poller` is the generic setInterval-with-visibility-pause-and-backoff primitive that any future background module reuses. `core/css` and `core/palettes` together make position and theme data-driven — the CSS rules for the panel are emitted from `config.ui.positions` and `core/palettes.mjs`, not hand-written. `core/i18n` provides a `LSB.t(key, locale?)` API; all user-visible strings go through it.
+`core/settings` is the registry every module writes through — adding a new setting is one `LSB.settings.register({...})` call; the popover inside the panel renders the controls automatically. `core/poller` is the generic setInterval-with-visibility-pause-and-backoff primitive that any future background module reuses; an optional `leader` gate makes only the leader tab tick. `lib/tab-leader.mjs` elects that leader with a localStorage heartbeat (5s heartbeat / 10s timeout / release on close), so opening linux.sb in N tabs does not duplicate notification or auto-signin requests. `core/css` and `core/palettes` together make position and theme data-driven — the CSS rules for the panel are emitted from `config.ui.positions` and `core/palettes.mjs`, not hand-written. `core/i18n` provides a `LSB.t(key, locale?)` API; all user-visible strings go through it.
 
 To add a feature, append a `LSB.register(...)` block at the bottom of `linux-sb-suite.user.js` (or, for pure logic, a `lib/*.mjs` file). Wire it to settings, sections, and the poller — the rest is automatic.
 

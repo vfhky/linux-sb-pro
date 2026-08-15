@@ -1,7 +1,9 @@
 // Generic poller: tick at a fixed interval while the document is visible,
 // with an optional backoff after N consecutive errors.  Inject the
-// `document` object so tests can run without a real DOM.
-export function makePoller({ name, onTick, intervalMs = 60_000, backoffAfter = 3, backoffMs = 5 * 60_000, document: doc = (typeof document !== "undefined" ? document : null) } = {}) {
+// `document` object so tests can run without a real DOM.  An optional
+// `leader` gate ({ isLeader() }) makes only the leader tab tick, which
+// pairs with lib/tab-leader.mjs for multi-tab coordination.
+export function makePoller({ name, onTick, intervalMs = 60_000, backoffAfter = 3, backoffMs = 5 * 60_000, leader = null, document: doc = (typeof document !== "undefined" ? document : null) } = {}) {
   if (typeof onTick !== "function") throw new Error("makePoller: onTick must be a function");
   if (!(intervalMs > 0)) throw new Error("makePoller: intervalMs must be > 0");
   if (!name) throw new Error("makePoller: name required");
@@ -27,6 +29,8 @@ export function makePoller({ name, onTick, intervalMs = 60_000, backoffAfter = 3
   async function runOnce() {
     if (poller.state !== "running") return;
     if (doc && doc.hidden) { schedule(); return; }
+    // Multi-tab gate: only the leader tab ticks; followers just reschedule.
+    if (leader && typeof leader.isLeader === "function" && !leader.isLeader()) { schedule(); return; }
     if (runningTick) { schedule(); return; }
     runningTick = true;
     try {
