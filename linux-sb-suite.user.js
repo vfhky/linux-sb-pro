@@ -98,6 +98,7 @@
       // the positions map below; CSS is generated from it.
       themes: ["light", "dark", "auto"],
       positions: {
+        RC: { top: "50%", right: 12, centerY: true },
         BR: { bottom: 12, right: 12 },
         BL: { bottom: 12, left: 12 },
         TR: { top: 12, right: 12 },
@@ -913,10 +914,8 @@
       return { name: "panelStyle", init() {} };
     }
     const theme = LSB.settings.get("panel.theme");
-    // Panel position is fixed at bottom-right (1.2.2+): the position setting
-    // was removed on request. config.ui.positions still drives the CSS, so
-    // re-enabling is one registration plus this constant.
-    const POS = "BR";
+    // Panel position: right-center (vertical middle of the viewport).
+    const POS = "RC";
 
     LSB.panelStyle = {
       get pos() { return POS; },
@@ -1250,8 +1249,19 @@
         background: radial-gradient(circle, rgba(74, 158, 143, 0.1) 0%, transparent 62%);
       }
       @keyframes lsb-panel-in {
-        from { opacity: 0; transform: translateY(12px) scale(0.97); }
+        from { opacity: 0; transform: translateY(10px) scale(0.97); }
         to { opacity: 1; transform: none; }
+      }
+      /* right-center placement: vertical middle; must win over the entrance
+         animation's transform so the panel stays centered after it ends. */
+      #lsb-panel[data-pos="RC"] {
+        top: 50%;
+        transform: translateY(-50%);
+        animation: lsb-panel-in-rc 0.45s var(--ease);
+      }
+      @keyframes lsb-panel-in-rc {
+        from { opacity: 0; transform: translateY(calc(-50% + 10px)) scale(0.97); }
+        to { opacity: 1; transform: translateY(-50%); }
       }
       #lsb-panel:hover {
         border-color: rgba(138, 164, 244, 0.35);

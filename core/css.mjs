@@ -38,8 +38,15 @@ export function panelPositionCss(positions) {
   const sides = ["top", "right", "bottom", "left"];
   return Object.entries(positions)
     .map(([pos, off]) => {
-      const decls = sides.map((s) => s + ":" + (off[s] != null ? off[s] + "px" : "auto") + ";").join("");
-      return "#lsb-panel[data-pos=\"" + pos + "\"]{" + decls + "}";
+      const decls = sides.map((s) => {
+        const v = off[s];
+        if (v == null) return s + ":auto;";
+        // numbers → px, strings (e.g. "50%") pass through
+        return s + ":" + (typeof v === "number" ? v + "px" : v) + ";";
+      }).join("");
+      // Vertical-centering positions (e.g. RC: right-center) translate along Y.
+      const transform = off.centerY ? "transform:translateY(-50%);" : "";
+      return "#lsb-panel[data-pos=\"" + pos + "\"]{" + decls + transform + "}";
     })
     .join("\n");
 }
