@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-16T15:46:55.983Z
+ * built: 2026-08-16T16:13:30.405Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -2674,6 +2674,9 @@ function _userIdFromHref(href) {
       #lsb-panel:not(.lsb-open) .lsb-hdr-btns,
       #lsb-panel:not(.lsb-open) .lsb-chevron,
       #lsb-panel:not(.lsb-open) .lsb-notif-dot { display: none; }
+      /* collapsed: hide the version chip so only the icon shows */
+      #lsb-panel:not(.lsb-open) .lsb-site-ver { display: none !important; }
+      #lsb-panel:not(.lsb-open) .lsb-site-wrap { gap: 0; }
       #lsb-panel:not(.lsb-open) .lsb-site-icon {
         width: 26px; height: 26px; border-radius: 50%;
         border: 2px solid rgba(255, 255, 255, 0.45);
@@ -3059,21 +3062,36 @@ function _userIdFromHref(href) {
 
       /* ================= settings dropdown (LDStatus .ldsp-settings-menu) ================= */
       #lsb-panel .lsb-settings-menu {
-        position: absolute; top: 34px; left: 8px; right: auto; z-index: 30;
-        width: clamp(220px, 85%, 300px);
-        padding: 8px;
+        position: absolute; top: 36px; left: 8px; right: auto; z-index: 30;
+        width: clamp(230px, 88%, 320px);
+        padding: 10px;
         background: var(--lsb-bg-card, rgba(24, 26, 36, 0.97));
         border: 1px solid var(--lsb-border2, rgba(255, 255, 255, 0.1));
-        border-radius: 12px;
+        border-radius: 14px;
         box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
         opacity: 0; pointer-events: none;
         transform: translateY(-8px) scale(0.98);
         transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
         backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       }
+      /* light theme: clean white settings dropdown */
+      #lsb-panel[data-effective-theme="light"] .lsb-settings-menu {
+        background: rgba(255, 255, 255, 0.96);
+        border-color: rgba(80, 112, 208, 0.15);
+        box-shadow: 0 16px 40px rgba(30, 41, 80, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      }
       #lsb-panel.settings-open .lsb-settings-menu { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
-      #lsb-panel .lsb-settings-head { display: flex; align-items: center; padding: 4px 6px 8px; border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06)); margin-bottom: 8px; }
-      #lsb-panel .lsb-settings-head-title { font-size: 12px; font-weight: 700; }
+      #lsb-panel .lsb-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 10px; border-bottom: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06)); margin-bottom: 8px; }
+      #lsb-panel .lsb-settings-head-title { font-size: 12px; font-weight: 700; flex: 1; }
+      #lsb-panel .lsb-settings-close {
+        width: 22px; height: 22px; border: none; border-radius: 7px; flex-shrink: 0;
+        background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
+        color: var(--lsb-fg-sec, #9499ad); font-size: 14px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s, transform 0.15s;
+      }
+      #lsb-panel .lsb-settings-close:hover { background: var(--lsb-bg-hover, rgba(38, 42, 56, 0.95)); color: var(--lsb-fg, #e4e6ed); transform: scale(1.05); }
       #lsb-panel .lsb-settings-nav {
         display: flex; align-items: center; justify-content: space-between; gap: 10px;
         width: 100%; padding: 9px 10px; margin-bottom: 6px;
@@ -3249,6 +3267,7 @@ function _userIdFromHref(href) {
         <div class="lsb-settings-view active" data-settings-view="root">
           <div class="lsb-settings-head">
             <span class="lsb-settings-head-title">${LSB.i18n.t("panel.settings")}</span>
+            <button type="button" class="lsb-settings-close" data-lsb="settings-close" aria-label="关闭">×</button>
           </div>
           <div class="lsb-settings-body">
             <button type="button" class="lsb-settings-nav" data-settings-open="theme">
@@ -3269,6 +3288,7 @@ function _userIdFromHref(href) {
           <div class="lsb-settings-head">
             <button type="button" class="lsb-settings-back" data-settings-back="root" aria-label="返回">‹</button>
             <span class="lsb-settings-head-title">🎨 ${LSB.i18n.t("panel.theme")}</span>
+            <button type="button" class="lsb-settings-close" data-lsb="settings-close" aria-label="关闭">×</button>
           </div>
           <div class="lsb-settings" data-lsb="settings"></div>
         </div>
@@ -3582,9 +3602,8 @@ function _userIdFromHref(href) {
         });
       }
     });
-    // Gear opens the settings dropdown (LDStatus-style), always reset to root view.
-    gear.addEventListener("click", (ev) => {
-      ev.stopPropagation();
+    // Gear toggles the settings dropdown (LDStatus-style).
+    function openSettingsMenu() {
       setOpen(true);
       // Ensure at least one pane is active so the body never collapses.
       if (!root.querySelector(".lsb-pane.active")) {
@@ -3594,6 +3613,17 @@ function _userIdFromHref(href) {
       renderSettings();
       setSettingsView("root");
       root.classList.add("settings-open");
+    }
+    function closeSettingsMenu() {
+      root.classList.remove("settings-open");
+    }
+    gear.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (root.classList.contains("settings-open")) {
+        closeSettingsMenu();
+      } else {
+        openSettingsMenu();
+      }
     });
     // LDStatus-style dropdown: multi-view navigation (root → sub-views).
     // Any [data-settings-open] row switches to its view; [data-settings-back]
@@ -3607,6 +3637,8 @@ function _userIdFromHref(href) {
     if (settingsMenu) {
       settingsMenu.addEventListener("click", (ev) => {
         ev.stopPropagation();
+        const close = ev.target.closest('[data-lsb="settings-close"]');
+        if (close) { closeSettingsMenu(); return; }
         const back = ev.target.closest('[data-settings-back]');
         if (back) {
           renderSettings();
@@ -3632,16 +3664,20 @@ function _userIdFromHref(href) {
     function activateTab(name) {
       if (name === "settings") {
         // Settings "tab" opens the dropdown; keep the current pane active so
-        // the body never collapses to zero height.
+        // the body never collapses to zero height. Clicking again closes it.
         const prev = root.querySelector(".lsb-pane.active");
         if (prev) _lastPane = prev.dataset.lsbPane;
         root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === "settings"));
         const keep = root.querySelector('[data-lsb-pane="' + _lastPane + '"]');
         root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.toggle("active", p === keep));
         updateTabIndicator();
-        renderSettings();
-        setSettingsView("root");
-        root.classList.add("settings-open");
+        if (root.classList.contains("settings-open")) {
+          closeSettingsMenu();
+        } else {
+          renderSettings();
+          setSettingsView("root");
+          root.classList.add("settings-open");
+        }
         return;
       }
       _lastPane = name;
