@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-16T14:39:42.607Z
+ * built: 2026-08-16T14:45:49.476Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -1638,6 +1638,7 @@ function _userIdFromHref(href) {
     "panel.theme.auto":    { zh: "跟随系统", en: "Follow system" },
     "panel.theme.light":   { zh: "浅色",     en: "Light" },
     "panel.theme.dark":    { zh: "深色",     en: "Dark" },
+    "checkin.title":       { zh: "签到",     en: "Check-in" },
     "notif.title":         { zh: "通知",     en: "Notifications" },
     "history.title":       { zh: "浏览历史",  en: "History" },
     "history.empty":       { zh: "暂无浏览历史", en: "No history yet" },
@@ -2534,7 +2535,7 @@ function _userIdFromHref(href) {
         backdrop-filter: blur(22px) saturate(160%);
         -webkit-backdrop-filter: blur(22px) saturate(160%);
         user-select: none;
-        width: min(320px, 92vw); max-width: 320px; min-width: 264px;
+        width: min(352px, 92vw); max-width: 352px; min-width: 300px;
         overflow: hidden;
         animation: lsb-panel-in 0.45s var(--ease);
         transition: box-shadow 0.3s ease, border-color 0.3s ease,
@@ -2845,6 +2846,41 @@ function _userIdFromHref(href) {
       }
       #lsb-panel .lsb-hero-btn:active { transform: translateY(0) scale(0.98); }
       #lsb-panel .lsb-hero-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; transform: none; }
+
+      /* ================= check-in pane (LDStatus .ldsp-reqs slot) ================= */
+      #lsb-panel .lsb-checkin-hero {
+        display: flex; align-items: center; gap: 16px;
+        padding: 16px; margin-bottom: 10px;
+        background: var(--lsb-bg-card, rgba(24, 26, 36, 0.92));
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.06));
+        border-radius: var(--r-md);
+        position: relative; overflow: hidden;
+      }
+      #lsb-panel .lsb-checkin-hero::before {
+        content: ""; position: absolute; inset: 0;
+        background: radial-gradient(circle at 30% 0%, rgba(107, 140, 239, 0.1), transparent 70%);
+        pointer-events: none;
+      }
+      #lsb-panel .lsb-checkin-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+      #lsb-panel .lsb-checkin-ring svg { transform: rotate(-90deg); }
+      #lsb-panel .lsb-checkin-ring .lsb-ring-bg { stroke: var(--lsb-bg-el, rgba(32, 35, 48, 0.88)); }
+      #lsb-panel .lsb-checkin-ring .lsb-ring-fill { stroke: url(#lsb-ring-grad); }
+      #lsb-panel .lsb-checkin-ring-val {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 14px; font-weight: 800; letter-spacing: -0.02em;
+      }
+      #lsb-panel .lsb-checkin-stats { display: flex; gap: 24px; position: relative; z-index: 1; }
+      #lsb-panel .lsb-checkin-stat { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 44px; }
+      #lsb-panel .lsb-checkin-stat-val { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+      #lsb-panel .lsb-checkin-stat-val.ok { color: var(--lsb-ok, #5bb5a6); }
+      #lsb-panel .lsb-checkin-stat-lbl { font-size: 9px; color: var(--lsb-fg-mut, #5d6275); font-weight: 600; white-space: nowrap; }
+      #lsb-panel .lsb-checkin-status {
+        font-size: 12px; font-weight: 600; text-align: center;
+        padding: 9px 12px; border-radius: 10px; margin-bottom: 10px;
+        color: var(--lsb-ok, #5bb5a6);
+        background: var(--lsb-ok-bg, rgba(91, 181, 166, 0.12));
+        border: 1px solid var(--lsb-ok, #5bb5a6);
+      }
 
       /* ================= tabs: floating glass + sliding indicator ================= */
       #lsb-panel .lsb-tabs {
@@ -3194,7 +3230,11 @@ function _userIdFromHref(href) {
         </div>
         <div class="lsb-tabs" data-lsb="tabs">
           <div class="lsb-tab-indicator"><div class="lsb-tab-indicator-glass"></div><div class="lsb-tab-indicator-shine"></div></div>
-          <button type="button" class="lsb-tab active" data-lsb-tab="notif">
+          <button type="button" class="lsb-tab active" data-lsb-tab="checkin">
+            <span class="lsb-tab-ic">📋</span>
+            <span class="lsb-tab-text">${LSB.i18n.t("checkin.title")}</span>
+          </button>
+          <button type="button" class="lsb-tab" data-lsb-tab="notif">
             <span class="lsb-tab-ic">🔔</span>
             <span class="lsb-tab-text">${LSB.i18n.t("notif.title")}</span>
           </button>
@@ -3202,14 +3242,21 @@ function _userIdFromHref(href) {
             <span class="lsb-tab-ic">🕘</span>
             <span class="lsb-tab-text">${LSB.i18n.t("history.title")}</span>
           </button>
-        </div>
-        <div class="lsb-content">
-          <div class="lsb-pane active" data-lsb-pane="notif">
+          <button type="button" class="lsb-tab" data-lsb-tab="settings">
+            <span class="lsb-tab-ic">⚙️</span>
+            <span class="lsb-tab-text">${LSB.i18n.t("panel.settings")}</span>
+          </button>
+        </div><div class="lsb-content">
+          <div class="lsb-pane active" data-lsb-pane="checkin">
+            <div class="lsb-sections" data-lsb="sections-checkin"></div>
+          </div>
+          <div class="lsb-pane" data-lsb-pane="notif">
             <div class="lsb-sections" data-lsb="sections"></div>
           </div>
           <div class="lsb-pane" data-lsb-pane="history">
             <div class="lsb-sections" data-lsb="sections-history"></div>
           </div>
+          <div class="lsb-pane" data-lsb-pane="settings"></div>
         </div>
       </div>
     `;
@@ -3238,6 +3285,44 @@ function _userIdFromHref(href) {
     const gear = $("gear");
     versionEl.textContent = LSB.version; // template already renders the "v" prefix
 
+    // Latest signin status cache (populated by refresh()) for the
+    // check-in pane section (LDStatus .ldsp-reqs slot).
+    let _signinStatusCache = null;
+    if (LSB.sections) {
+      LSB.sections.register("checkin-summary", {
+        order: 0,
+        pane: "checkin",
+        hidden: () => !isLoggedIn(),
+        render: () => {
+          const status = _signinStatusCache;
+          const stats = (status && status.stats) || {};
+          const streak = Number(stats.streak) || 0;
+          const total = Number(stats.total) || 0;
+          const pct = Math.max(0, Math.min(100, streak / 30 * 100));
+          const circ = 103.67; // 2πr, r=16.5
+          const off = circ * (1 - pct / 100);
+          const signed = status && status.status === "signed-in";
+          return { innerHTML:
+            `<div class="lsb-checkin-hero">
+              <div class="lsb-checkin-ring">
+                <svg viewBox="0 0 42 42" width="64" height="64">
+                  <defs><linearGradient id="lsb-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#5070d0"/><stop offset="100%" stop-color="#5bb5a6"/></linearGradient></defs>
+                  <circle class="lsb-ring-bg" cx="21" cy="21" r="16.5" fill="none" stroke-width="4.5"/>
+                  <circle class="lsb-ring-fill" data-lsb="ring-fill" cx="21" cy="21" r="16.5" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
+                </svg>
+                <span class="lsb-checkin-ring-val">${pct}%</span>
+              </div>
+              <div class="lsb-checkin-stats">
+                <div class="lsb-checkin-stat"><span class="lsb-checkin-stat-val ok">${streak}</span><span class="lsb-checkin-stat-lbl">连续签到</span></div>
+                <div class="lsb-checkin-stat"><span class="lsb-checkin-stat-val">${total}</span><span class="lsb-checkin-stat-lbl">累计签到</span></div>
+              </div>
+            </div>
+            <div class="lsb-checkin-status">${signed ? "✓ 今日已签到" : "今日未签到"}</div>`,
+          };
+        },
+      });
+    }
+
     // Restore the persisted panel open/close state (LDStatus Panel borrow).
     try { if (LSB.storage.get("panel.open")) root.classList.add("lsb-open"); } catch (e) { /* ignore */ }
 
@@ -3256,6 +3341,12 @@ function _userIdFromHref(href) {
     // own section (e.g. notif) and the host fills them in.
     function rerenderSections() {
       if (!LSB.sections) return;
+      // Check-in pane: checkin-scoped sections.
+      const checkinHost = $("sections-checkin");
+      if (checkinHost) {
+        const outCheck = LSB.sections.render({ isLoggedIn: isLoggedIn(), pane: "checkin" });
+        checkinHost.innerHTML = outCheck.innerHTML;
+      }
       // Notifications pane: notif-scoped sections.
       const out = LSB.sections.render({ isLoggedIn: isLoggedIn(), pane: "notif" });
       sectionsHost.innerHTML = out.innerHTML;
@@ -3458,8 +3549,19 @@ function _userIdFromHref(href) {
       indicator.classList.add("show");
     }
     function activateTab(name) {
+      if (name === "settings") {
+        // Settings "tab" opens the settings dropdown directly.
+        root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === "settings"));
+        root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.remove("active"));
+        updateTabIndicator();
+        renderSettings();
+        setSettingsView("root");
+        root.classList.add("settings-open");
+        return;
+      }
       root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === name));
       root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.toggle("active", p.dataset.lsbPane === name));
+      root.classList.remove("settings-open");
       updateTabIndicator();
     }
     root.querySelectorAll(".lsb-tab").forEach((t) => {
@@ -3598,6 +3700,7 @@ function _userIdFromHref(href) {
 
       try {
         const s = await signin.getStatus();
+        _signinStatusCache = s; // for the check-in pane section
         const dotCls = {
           "signed-in": "lsb-signed",
           "not-signed-in": "lsb-unsigned",
