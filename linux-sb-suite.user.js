@@ -1204,13 +1204,12 @@
         font: 13px/1.55 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
         color: var(--lsb-fg, #e4e6ed);
-        /* deep-space glass: dark translucent + blur + ambient glow */
-        background: linear-gradient(160deg, rgba(28, 32, 48, 0.92) 0%, rgba(13, 16, 28, 0.97) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.09);
+        /* glass shell: follows the theme token (dark → deep-space, light → airy) */
+        background: var(--lsb-bg, #12131a);
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.09));
         border-radius: var(--r-lg);
-        box-shadow:
-          0 24px 64px rgba(0, 0, 0, 0.5),
-          0 0 0 1px rgba(107, 140, 239, 0.08),
+        box-shadow: var(--lsb-shadow, 0 24px 64px rgba(0, 0, 0, 0.5)),
+          0 0 0 1px var(--lsb-border-accent, rgba(107, 140, 239, 0.08)),
           inset 0 1px 0 rgba(255, 255, 255, 0.06);
         backdrop-filter: blur(22px) saturate(160%);
         -webkit-backdrop-filter: blur(22px) saturate(160%);
@@ -1233,6 +1232,13 @@
         content: ""; position: absolute; bottom: -130px; right: -90px; width: 360px; height: 360px;
         background: radial-gradient(circle, rgba(91, 181, 166, 0.22) 0%, transparent 62%);
         filter: blur(8px);
+      }
+      /* light theme: softer glows so the light glass stays airy */
+      #lsb-panel[data-theme="light"] .lsb-glow::before {
+        background: radial-gradient(circle, rgba(80, 112, 208, 0.16) 0%, transparent 62%);
+      }
+      #lsb-panel[data-theme="light"] .lsb-glow::after {
+        background: radial-gradient(circle, rgba(74, 158, 143, 0.1) 0%, transparent 62%);
       }
       @keyframes lsb-panel-in {
         from { opacity: 0; transform: translateY(12px) scale(0.97); }
@@ -2060,6 +2066,12 @@
       const s = LSB.settings.get(key);
       if (def.type === "boolean") s.set(el.checked);
       else s.set(el.getAttribute("data-lsb-value") || el.value);
+      // Keep the root-view label in sync after a change (theme etc.).
+      const tv = $("theme-value");
+      if (tv && key === "panel.theme" && LSB.panelStyle) {
+        const label = ({ auto: "跟随系统", light: "浅色", dark: "深色" })[LSB.panelStyle.theme] || LSB.panelStyle.theme;
+        tv.textContent = label;
+      }
     });
     // Gear opens the settings dropdown (LDStatus-style), always reset to root view.
     gear.addEventListener("click", (ev) => {

@@ -23,7 +23,7 @@
 // ==/UserScript==
 /*
  * linux.sb Suite  -- public build
- * built: 2026-08-16T14:26:47.143Z
+ * built: 2026-08-16T14:31:49.240Z
  * source: https://github.com/vfhky/linux-sb-pro
  */
 
@@ -198,38 +198,38 @@ function createI18n({ locale = "en", fallback = "en" } = {}) {
 // shares its exact dark/light color design.
 const PALETTES = {
   light: {
-    // surfaces — deep-space glass (panel stays dark & premium regardless of accent theme)
-    bg: "rgba(13,16,28,0.97)",
-    bgCard: "rgba(24,26,36,0.92)",
-    bgHover: "rgba(38,42,56,0.95)",
-    bgEl: "rgba(32,35,48,0.88)",
+    // surfaces — true light theme (clear visual difference from dark)
+    bg: "rgba(250,251,254,0.97)",
+    bgCard: "rgba(245,247,252,0.94)",
+    bgHover: "rgba(238,242,250,0.96)",
+    bgEl: "rgba(255,255,255,0.94)",
     // text
-    fg: "#e4e6ed",
-    fgSec: "#9499ad",
-    fgMut: "#5d6275",
-    // accents — brighter blue for the light option
-    accent: "#7aa2ff",
-    accentLight: "#9db8ff",
-    accent2: "#5bb5a6",
-    accent2Light: "#7cc9bc",
-    accent3: "#e07a8d",
+    fg: "#1e2030",
+    fgSec: "#4a5068",
+    fgMut: "#8590a6",
+    // accents
+    accent: "#5070d0",
+    accentLight: "#6b8cef",
+    accent2: "#4a9e8f",
+    accent2Light: "#5bb5a6",
+    accent3: "#d45d6e",
     // status
-    ok: "#5bb5a6",
-    okLight: "#7cc9bc",
-    okBg: "rgba(91,181,166,0.12)",
-    warn: "#d4a853",
-    warnBg: "rgba(212,168,83,0.12)",
-    danger: "#e07a8d",
-    errLight: "#ea9aa8",
-    errBg: "rgba(224,122,141,0.12)",
+    ok: "#4a9e8f",
+    okLight: "#5bb5a6",
+    okBg: "rgba(74,158,143,0.08)",
+    warn: "#c49339",
+    warnBg: "rgba(196,147,57,0.08)",
+    danger: "#d45d6e",
+    errLight: "#e07a8d",
+    errBg: "rgba(212,93,110,0.08)",
     // borders
-    border: "rgba(255,255,255,0.06)",
-    borderStrong: "rgba(255,255,255,0.1)",
-    borderAccent: "rgba(122,162,255,0.3)",
-    scrollbar: "rgba(140,150,175,0.5)",
-    scrollbarHover: "rgba(140,150,175,0.7)",
-    shadow: "0 20px 48px rgba(0,0,0,0.4)",
-    glow: "0 0 0 1px rgba(122,162,255,0.2), 0 20px 48px rgba(0,0,0,0.5)",
+    border: "rgba(0,0,0,0.08)",
+    borderStrong: "rgba(0,0,0,0.1)",
+    borderAccent: "rgba(80,112,208,0.2)",
+    scrollbar: "rgba(15,23,42,0.18)",
+    scrollbarHover: "rgba(15,23,42,0.34)",
+    shadow: "0 20px 48px rgba(30,41,80,0.16)",
+    glow: "0 0 0 1px rgba(80,112,208,0.22), 0 20px 48px rgba(30,41,80,0.18)",
   },
   dark: {
     // surfaces
@@ -2524,13 +2524,12 @@ function _userIdFromHref(href) {
         font: 13px/1.55 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
         color: var(--lsb-fg, #e4e6ed);
-        /* deep-space glass: dark translucent + blur + ambient glow */
-        background: linear-gradient(160deg, rgba(28, 32, 48, 0.92) 0%, rgba(13, 16, 28, 0.97) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.09);
+        /* glass shell: follows the theme token (dark → deep-space, light → airy) */
+        background: var(--lsb-bg, #12131a);
+        border: 1px solid var(--lsb-border, rgba(255, 255, 255, 0.09));
         border-radius: var(--r-lg);
-        box-shadow:
-          0 24px 64px rgba(0, 0, 0, 0.5),
-          0 0 0 1px rgba(107, 140, 239, 0.08),
+        box-shadow: var(--lsb-shadow, 0 24px 64px rgba(0, 0, 0, 0.5)),
+          0 0 0 1px var(--lsb-border-accent, rgba(107, 140, 239, 0.08)),
           inset 0 1px 0 rgba(255, 255, 255, 0.06);
         backdrop-filter: blur(22px) saturate(160%);
         -webkit-backdrop-filter: blur(22px) saturate(160%);
@@ -2553,6 +2552,13 @@ function _userIdFromHref(href) {
         content: ""; position: absolute; bottom: -130px; right: -90px; width: 360px; height: 360px;
         background: radial-gradient(circle, rgba(91, 181, 166, 0.22) 0%, transparent 62%);
         filter: blur(8px);
+      }
+      /* light theme: softer glows so the light glass stays airy */
+      #lsb-panel[data-theme="light"] .lsb-glow::before {
+        background: radial-gradient(circle, rgba(80, 112, 208, 0.16) 0%, transparent 62%);
+      }
+      #lsb-panel[data-theme="light"] .lsb-glow::after {
+        background: radial-gradient(circle, rgba(74, 158, 143, 0.1) 0%, transparent 62%);
       }
       @keyframes lsb-panel-in {
         from { opacity: 0; transform: translateY(12px) scale(0.97); }
@@ -3380,6 +3386,12 @@ function _userIdFromHref(href) {
       const s = LSB.settings.get(key);
       if (def.type === "boolean") s.set(el.checked);
       else s.set(el.getAttribute("data-lsb-value") || el.value);
+      // Keep the root-view label in sync after a change (theme etc.).
+      const tv = $("theme-value");
+      if (tv && key === "panel.theme" && LSB.panelStyle) {
+        const label = ({ auto: "跟随系统", light: "浅色", dark: "深色" })[LSB.panelStyle.theme] || LSB.panelStyle.theme;
+        tv.textContent = label;
+      }
     });
     // Gear opens the settings dropdown (LDStatus-style), always reset to root view.
     gear.addEventListener("click", (ev) => {
