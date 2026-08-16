@@ -3,11 +3,11 @@
 // shares its exact dark/light color design.
 const PALETTES = {
   light: {
-    // surfaces — true light theme (clear visual difference from dark)
-    bg: "rgba(250,251,254,0.97)",
-    bgCard: "rgba(245,247,252,0.94)",
+    // surfaces — clean bright light theme (no gray cast)
+    bg: "#ffffff",
+    bgCard: "rgba(247,249,253,0.96)",
     bgHover: "rgba(238,242,250,0.96)",
-    bgEl: "rgba(255,255,255,0.94)",
+    bgEl: "rgba(255,255,255,0.96)",
     // text
     fg: "#1e2030",
     fgSec: "#4a5068",

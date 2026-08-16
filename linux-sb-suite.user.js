@@ -342,7 +342,7 @@
     LSB.settings.register({
       key: "panel.theme", type: "enum", group: "panel",
       label: { zh: "主题", en: "Theme" },
-      default: "auto", options: LSB.config.ui.themes,
+      default: "light", options: LSB.config.ui.themes,
     });
     LSB.settings.register({
       key: "signin.auto", type: "boolean", group: "signin",
@@ -1241,13 +1241,27 @@
         background: radial-gradient(circle, rgba(91, 181, 166, 0.22) 0%, transparent 62%);
         filter: blur(8px);
       }
-      /* light theme: softer glows so the light glass stays airy */
-      #lsb-panel[data-theme="light"] .lsb-glow::before {
-        background: radial-gradient(circle, rgba(80, 112, 208, 0.16) 0%, transparent 62%);
+      /* light theme: clean white shell — no heavy blur, subtle glows */
+      #lsb-panel[data-effective-theme="light"] {
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        box-shadow: 0 12px 32px rgba(30, 41, 80, 0.12), 0 0 0 1px rgba(80, 112, 208, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
       }
-      #lsb-panel[data-theme="light"] .lsb-glow::after {
-        background: radial-gradient(circle, rgba(74, 158, 143, 0.1) 0%, transparent 62%);
+      #lsb-panel[data-effective-theme="light"] .lsb-glow::before {
+        background: radial-gradient(circle, rgba(80, 112, 208, 0.14) 0%, transparent 62%);
       }
+      #lsb-panel[data-effective-theme="light"] .lsb-glow::after {
+        background: radial-gradient(circle, rgba(74, 158, 143, 0.08) 0%, transparent 62%);
+      }
+      /* light theme: glass tab bar becomes a light frosted strip */
+      #lsb-panel[data-effective-theme="light"] .lsb-tabs {
+        background: rgba(255, 255, 255, 0.75);
+        border-color: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 5px 16px rgba(80, 112, 208, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+      }
+      #lsb-panel[data-effective-theme="light"] .lsb-tab { color: var(--lsb-fg-sec, #4a5068); }
+      #lsb-panel[data-effective-theme="light"] .lsb-tab:hover { color: var(--lsb-fg, #1e2030); }
+      #lsb-panel[data-effective-theme="light"] .lsb-tab.active { color: #173263; text-shadow: none; }
       @keyframes lsb-panel-in {
         from { opacity: 0; transform: translateY(10px) scale(0.97); }
         to { opacity: 1; transform: none; }
@@ -1432,7 +1446,7 @@
           transform 0.34s var(--ease), visibility 0s linear 0.38s;
       }
       #lsb-panel.lsb-open .lsb-details {
-        max-height: min(620px, 85vh); opacity: 1; visibility: visible;
+        max-height: 560px; opacity: 1; visibility: visible;
         transform: translateY(0);
         overflow-y: auto;
         transition: max-height 0.38s var(--ease), opacity 0.24s ease, transform 0.34s var(--ease);
@@ -2059,6 +2073,7 @@
       const effective = (theme === "auto")
         ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
         : theme;
+      root.dataset.effectiveTheme = effective; // drives light/dark CSS variants
       if (typeof getPalette === "function" && effective !== "auto") {
         try {
           const p = getPalette(effective);
