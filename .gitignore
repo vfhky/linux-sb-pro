@@ -84,3 +84,4 @@ docs/superpowers/specs/*.user.js
 
 # analysis screenshots of the running panel
 /final-*.png
+.superdesign/tmp/

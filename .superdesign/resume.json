@@ -1,0 +1,30 @@
+{
+  "projectId": "e469c68f-08b2-4cfc-9ddb-42a3e71e4c05",
+  "targets": {
+    "panel-reproduction": {
+      "targetKind": "existing",
+      "baselineDraftId": "adf4096d-e437-47b4-8692-f7295752a3b4",
+      "activeDraftId": "625a28f1-24b4-4ea3-9545-3477b19d1eb3",
+      "title": "linux.sb Suite Floating Panel (reproduction)",
+      "branchDescription": "Pixel-perfect reproduction of current panel",
+      "designSystem": ".superdesign/design-system.md",
+      "contextBundle": [
+        ".superdesign/design-system.md",
+        ".superdesign/init/components.md",
+        ".superdesign/init/theme.md",
+        ".superdesign/init/layouts.md",
+        ".superdesign/tmp/current-template.md"
+      ]
+    }
+  },
+  "variations": {
+    "clean-light-airy": {
+      "draftId": "625a28f1-24b4-4ea3-9545-3477b19d1eb3",
+      "description": "Bright white light theme, no black"
+    },
+    "rich-indigo-glass": {
+      "draftId": "2a9ccbb3-7c71-4e2b-b6b0-b088e8af352c",
+      "description": "Deep indigo glass, no black"
+    }
+  }
+}

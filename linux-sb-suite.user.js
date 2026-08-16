@@ -1229,6 +1229,21 @@
       #lsb-panel .lsb-section-title, #lsb-panel .lsb-notif-badge {
         transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
       }
+      /* Variant A footer: blue→teal gradient hairline */
+      #lsb-panel .lsb-footer-strip {
+        height: 3px;
+        background: linear-gradient(90deg, #5070d0, #5bb5a6);
+        opacity: 0.25;
+        flex-shrink: 0;
+        position: relative; z-index: 1;
+      }
+      /* light theme: Variant A ambient glows (lavender-blue + teal) */
+      #lsb-panel[data-effective-theme="light"]::before {
+        content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
+        background:
+          radial-gradient(circle at top left, rgba(120, 150, 255, 0.08), transparent 50%),
+          radial-gradient(circle at bottom right, rgba(90, 200, 180, 0.06), transparent 50%);
+      }
       /* decorative ambient glows inside the panel (deep-space glass) */
       #lsb-panel .lsb-glow { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; border-radius: inherit; }
       #lsb-panel .lsb-glow::before {
@@ -1253,15 +1268,41 @@
       #lsb-panel[data-effective-theme="light"] .lsb-glow::after {
         background: radial-gradient(circle, rgba(74, 158, 143, 0.08) 0%, transparent 62%);
       }
-      /* light theme: glass tab bar becomes a light frosted strip */
+      /* Variant A: content cards — white frosted, soft blue hairline */
+      #lsb-panel[data-effective-theme="light"] .lsb-checkin-hero,
+      #lsb-panel[data-effective-theme="light"] .lsb-notif-list li,
+      #lsb-panel[data-effective-theme="light"] .lsb-history-list li,
+      #lsb-panel[data-effective-theme="light"] .lsb-stats {
+        background: rgba(255, 255, 255, 0.6);
+        border-color: rgba(80, 112, 208, 0.12);
+        box-shadow: 0 1px 2px rgba(30, 41, 80, 0.06);
+      }
+      #lsb-panel[data-effective-theme="light"] .lsb-notif-list li:hover,
+      #lsb-panel[data-effective-theme="light"] .lsb-history-list li:hover {
+        background: #f7f9fd;
+        border-color: rgba(80, 112, 208, 0.3);
+      }
+      #lsb-panel[data-effective-theme="light"] .lsb-hero-btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+      /* light theme: glass tab bar — Variant A clean light airy */
       #lsb-panel[data-effective-theme="light"] .lsb-tabs {
-        background: rgba(255, 255, 255, 0.75);
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(18px) saturate(140%);
+        -webkit-backdrop-filter: blur(18px) saturate(140%);
         border-color: rgba(255, 255, 255, 0.9);
         box-shadow: 0 5px 16px rgba(80, 112, 208, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
       }
-      #lsb-panel[data-effective-theme="light"] .lsb-tab { color: var(--lsb-fg-sec, #4a5068); }
-      #lsb-panel[data-effective-theme="light"] .lsb-tab:hover { color: var(--lsb-fg, #1e2030); }
+      #lsb-panel[data-effective-theme="light"] .lsb-tab-indicator-glass {
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: 0 7px 16px rgba(42, 64, 120, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(80, 112, 208, 0.2);
+      }
+      #lsb-panel[data-effective-theme="light"] .lsb-tab-indicator-shine {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.1) 45%, transparent);
+      }
+      #lsb-panel[data-effective-theme="light"] .lsb-tab { color: #8590a6; }
+      #lsb-panel[data-effective-theme="light"] .lsb-tab:hover { color: #5070d0; }
       #lsb-panel[data-effective-theme="light"] .lsb-tab.active { color: #173263; text-shadow: none; }
+      #lsb-panel[data-effective-theme="light"] .lsb-ring-bg { stroke: rgba(0, 0, 0, 0.05); }
       @keyframes lsb-panel-in {
         from { opacity: 0; transform: translateY(10px) scale(0.97); }
         to { opacity: 1; transform: none; }
@@ -1621,8 +1662,8 @@
       }
       #lsb-panel .lsb-tab {
         position: relative; z-index: 1;
-        flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-        padding: 7px 8px;
+        flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+        padding: 6px 8px;
         border: none; background: transparent;
         color: var(--lsb-fg-sec, #9499ad);
         font: inherit; font-size: 11px; font-weight: 600;
@@ -1641,7 +1682,7 @@
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 45%, transparent 100%);
         opacity: 0; transition: opacity 0.2s;
       }
-      #lsb-panel .lsb-tab .lsb-tab-ic { display: inline-flex; flex: none; position: relative; z-index: 1; transition: transform 0.25s var(--ease); }
+      #lsb-panel .lsb-tab .lsb-tab-ic { display: inline-flex; flex: none; font-size: 14px; line-height: 1; margin-bottom: 1px; position: relative; z-index: 1; transition: transform 0.25s var(--ease); }
       #lsb-panel .lsb-tab:hover { color: var(--lsb-fg, #e4e6ed); transform: translateY(-1px); }
       #lsb-panel .lsb-tab:hover::before { opacity: 1; }
       #lsb-panel .lsb-tab.active { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
@@ -1963,6 +2004,7 @@
           <div class="lsb-pane" data-lsb-pane="settings"></div>
         </div>
       </div>
+      <div class="lsb-footer-strip" aria-hidden="true"></div>
     `;
     document.documentElement.appendChild(root);
 
