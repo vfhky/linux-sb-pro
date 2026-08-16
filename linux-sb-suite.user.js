@@ -2259,6 +2259,11 @@
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
       setOpen(true);
+      // Ensure at least one pane is active so the body never collapses.
+      if (!root.querySelector(".lsb-pane.active")) {
+        const keep = root.querySelector('[data-lsb-pane="' + _lastPane + '"]') || root.querySelector(".lsb-pane");
+        if (keep) keep.classList.add("active");
+      }
       renderSettings();
       setSettingsView("root");
       root.classList.add("settings-open");
@@ -2295,17 +2300,24 @@
       indicator.style.width = active.offsetWidth + "px";
       indicator.classList.add("show");
     }
+    // Remember the last real pane so the settings tab never blanks the body.
+    let _lastPane = "checkin";
     function activateTab(name) {
       if (name === "settings") {
-        // Settings "tab" opens the settings dropdown directly.
+        // Settings "tab" opens the dropdown; keep the current pane active so
+        // the body never collapses to zero height.
+        const prev = root.querySelector(".lsb-pane.active");
+        if (prev) _lastPane = prev.dataset.lsbPane;
         root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === "settings"));
-        root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.remove("active"));
+        const keep = root.querySelector('[data-lsb-pane="' + _lastPane + '"]');
+        root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.toggle("active", p === keep));
         updateTabIndicator();
         renderSettings();
         setSettingsView("root");
         root.classList.add("settings-open");
         return;
       }
+      _lastPane = name;
       root.querySelectorAll(".lsb-tab").forEach((t) => t.classList.toggle("active", t.dataset.lsbTab === name));
       root.querySelectorAll(".lsb-pane").forEach((p) => p.classList.toggle("active", p.dataset.lsbPane === name));
       root.classList.remove("settings-open");
