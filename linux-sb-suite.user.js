@@ -2061,12 +2061,13 @@
       if (def.type === "boolean") s.set(el.checked);
       else s.set(el.getAttribute("data-lsb-value") || el.value);
     });
-    // Gear switches to the Settings tab (LDStatus-style tabs, no popover).
+    // Gear opens the settings dropdown (LDStatus-style), always reset to root view.
     gear.addEventListener("click", (ev) => {
       ev.stopPropagation();
       setOpen(true);
       renderSettings();
-      root.classList.toggle("settings-open");
+      setSettingsView("root");
+      root.classList.add("settings-open");
     });
     // LDStatus-style dropdown: multi-view navigation (root → sub-views).
     // Any [data-settings-open] row switches to its view; [data-settings-back]
@@ -2081,7 +2082,11 @@
       settingsMenu.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const back = ev.target.closest('[data-settings-back]');
-        if (back) { setSettingsView(back.dataset.settingsBack || "root"); return; }
+        if (back) {
+          renderSettings();
+          setSettingsView(back.dataset.settingsBack || "root");
+          return;
+        }
         const open = ev.target.closest('[data-settings-open]');
         if (open) { renderSettings(); setSettingsView(open.dataset.settingsOpen || "root"); return; }
       });
@@ -2125,6 +2130,7 @@
     // Persisted open/close state: the panel remembers whether it was expanded.
     function setOpen(open) {
       root.classList.toggle("lsb-open", open);
+      if (!open) root.classList.remove("settings-open");
       try { LSB.storage.set("panel.open", !!open, 0); } catch (e) { /* ignore */ }
     }
 
