@@ -1218,8 +1218,16 @@
         overflow: hidden;
         animation: lsb-panel-in 0.45s var(--ease);
         transition: box-shadow 0.3s ease, border-color 0.3s ease,
+          background-color 0.3s ease, color 0.3s ease,
           width 0.35s var(--ease), height 0.35s var(--ease), min-width 0.35s var(--ease),
           max-width 0.35s var(--ease), max-height 0.35s var(--ease), border-radius 0.35s var(--ease);
+      }
+      /* theme switch: smooth color morph across the whole panel */
+      #lsb-panel, #lsb-panel .lsb-user, #lsb-panel .lsb-stats, #lsb-panel .lsb-notif-list li,
+      #lsb-panel .lsb-history-list li, #lsb-panel .lsb-settings-menu, #lsb-panel .lsb-settings-nav,
+      #lsb-panel .lsb-settings-toggle, #lsb-panel .lsb-seg span, #lsb-panel .lsb-hero-signed,
+      #lsb-panel .lsb-section-title, #lsb-panel .lsb-notif-badge {
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
       }
       /* decorative ambient glows inside the panel (deep-space glass) */
       #lsb-panel .lsb-glow { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; border-radius: inherit; }
@@ -1651,7 +1659,15 @@
       #lsb-panel .lsb-settings-nav-value { font-size: 10px; color: var(--lsb-fg-mut, #5d6275); }
       #lsb-panel .lsb-settings-nav-arrow { font-size: 13px; color: var(--lsb-fg-mut, #5d6275); }
       #lsb-panel .lsb-settings-view { display: none; padding: 2px; }
-      #lsb-panel .lsb-settings-view.active { display: block; animation: lsb-enter 0.18s var(--ease-out); }
+      #lsb-panel .lsb-settings-view.active { display: block; animation: lsb-settings-in 0.22s var(--ease-out); }
+      @keyframes lsb-settings-in {
+        from { opacity: 0; transform: translateX(10px); }
+        to { opacity: 1; transform: none; }
+      }
+      @keyframes lsb-settings-out {
+        from { opacity: 1; transform: none; }
+        to { opacity: 0; transform: translateX(-10px); }
+      }
       #lsb-panel .lsb-settings-back {
         width: 24px; height: 24px; border: none; border-radius: 7px;
         background: var(--lsb-bg-el, rgba(32, 35, 48, 0.88));
@@ -2071,6 +2087,14 @@
       if (tv && key === "panel.theme" && LSB.panelStyle) {
         const label = ({ auto: "跟随系统", light: "浅色", dark: "深色" })[LSB.panelStyle.theme] || LSB.panelStyle.theme;
         tv.textContent = label;
+      }
+      // Keep the segmented control's .active class in sync with the chosen value.
+      if (key === "panel.theme") {
+        const chosen = el.getAttribute("data-lsb-value") || el.value;
+        settingsHost.querySelectorAll(".lsb-seg").forEach((seg) => {
+          const input = seg.querySelector("input");
+          seg.classList.toggle("active", !!input && (input.getAttribute("data-lsb-value") || input.value) === chosen);
+        });
       }
     });
     // Gear opens the settings dropdown (LDStatus-style), always reset to root view.
